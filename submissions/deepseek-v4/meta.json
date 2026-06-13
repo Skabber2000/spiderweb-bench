@@ -1,0 +1,10 @@
+{
+  "model": "deepseek-v4-pro",
+  "provider": "DeepSeek",
+  "date": "2026-06-13",
+  "tokens_out": 16931,
+  "latency_s": 173.6,
+  "bytes": 40520,
+  "has_canvas": true,
+  "notes": ""
+}

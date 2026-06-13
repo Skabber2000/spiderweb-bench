@@ -1,0 +1,10 @@
+{
+  "model": "MiniMax-M3",
+  "provider": "MiniMax",
+  "date": "2026-06-13",
+  "tokens_out": 16300,
+  "latency_s": 785,
+  "bytes": 17660,
+  "has_canvas": true,
+  "notes": "Generated via MiniMax web UI (API key had insufficient balance). One-shot, same canonical prompt. Time 13m05s / 16.3k tokens reported by Eugene."
+}

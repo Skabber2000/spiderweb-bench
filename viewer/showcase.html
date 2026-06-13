@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SpiderWeb Bench — Comparative Showcase</title>
+<style>
+  :root{ --txt:#e6ecf6; --dim:#8b97ad; --gold:#ffd34d; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1920px;height:1080px;overflow:hidden;color:var(--txt);
+    font-family:"Segoe UI",Inter,system-ui,sans-serif;
+    background:radial-gradient(1500px 760px at 50% -8%, #131a2b 0%, #0a0d16 55%, #050609 100%);}
+  .stage{width:1920px;height:1080px;display:flex;flex-direction:column;padding:14px 30px 16px}
+
+  .title{display:flex;align-items:center;justify-content:center;gap:16px;height:44px;flex:0 0 auto}
+  .title h1{font-size:23px;font-weight:700;letter-spacing:.05em}
+  .title h1 b{color:#5fd0ff}
+  .title .tag{font-size:12px;color:var(--dim);letter-spacing:.22em;text-transform:uppercase}
+
+  /* main 3-column area */
+  .main{flex:1 1 auto;display:flex;gap:24px;min-height:0;padding:8px 0}
+  .col{flex:0 0 330px;display:flex;flex-direction:column;align-items:center;gap:10px}
+  .colhead{display:flex;align-items:center;gap:12px;height:56px}
+  .colhead .cname{font-size:16px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+  .colhead .csub{font-size:10.5px;color:var(--dim);letter-spacing:.08em}
+  .colstack{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;gap:14px}
+
+  .mid{flex:1 1 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:16px;min-width:0}
+  .panel{width:100%;max-width:520px;background:linear-gradient(180deg,rgba(20,28,44,.72),rgba(12,17,28,.72));
+    border:1px solid #26314a;border-radius:18px;padding:26px 30px;
+    box-shadow:0 30px 80px -30px rgba(0,0,0,.9)}
+  .panel h2{font-size:19px;letter-spacing:.04em;margin-bottom:4px}
+  .panel h2 b{color:#5fd0ff}
+  .panel .lead{font-size:12.5px;color:var(--dim);margin-bottom:16px;line-height:1.5}
+  .panel .rows{display:flex;flex-direction:column;gap:10px}
+  .rrow{display:grid;grid-template-columns:128px 1fr;gap:12px;align-items:baseline}
+  .rrow .k{font-size:11px;color:var(--gold);letter-spacing:.1em;text-transform:uppercase;font-weight:700}
+  .rrow .v{font-size:13px;color:#dfe7f3;line-height:1.45}
+  .rrow .v b{color:#fff}
+  .panel .foot{margin-top:14px;padding-top:12px;border-top:1px solid #222c42;
+    font-size:11.5px;color:#aeb9cc;line-height:1.45}
+  .panel .foot b{color:#7fe0a0}
+  /* results table */
+  .tbl{width:100%;border-collapse:collapse;font-size:12px;margin-top:4px}
+  .tbl th{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);
+    text-align:right;padding:5px 7px;border-bottom:1px solid #2a3550;font-weight:700}
+  .tbl th:first-child{text-align:left}
+  .tbl td{padding:5px 7px;border-bottom:1px solid #1b2336;font-variant-numeric:tabular-nums;
+    text-align:right;color:#cdd8ea}
+  .tbl td.m{text-align:left;font-weight:600;color:#fff;display:flex;align-items:center;gap:7px}
+  .tbl td.m small{color:#8b97ad;font-weight:400;font-size:10px}
+  .tbl td.q{color:#ffd34d;font-weight:700}
+  .tbl td.q i{font-style:normal;font-size:9px;letter-spacing:.3px;margin-left:4px;color:#8b97ad;font-weight:400}
+  .rk{display:inline-block;width:14px;color:#8b97ad;font-weight:700;font-size:11px;text-align:center}
+  .dot{width:8px;height:8px;border-radius:50%;flex:0 0 8px;display:inline-block}
+  .dot.us{background:#3b6fd6}.dot.cn{background:#de2910}.dot.eu{background:#ffcc00}
+
+  .tile{display:flex;flex-direction:column;align-items:center;gap:5px}
+  .screen{width:158px;height:158px;border-radius:11px;overflow:hidden;position:relative;
+    background:#000;border:1px solid #2a3346;box-shadow:0 12px 30px -14px rgba(0,0,0,.9)}
+  .screen iframe{position:absolute;top:0;left:0;width:800px;height:800px;border:0;
+    transform:scale(.1975);transform-origin:top left;background:#000}
+  .cap{text-align:center;width:200px}
+  .cap .m{font-size:13px;font-weight:650;line-height:1.1}
+  .cap .p{font-size:10px;color:var(--dim)}
+  .badge{display:inline-block;margin-top:2px;font-size:9.5px;color:#bfe7ff;
+    background:rgba(50,120,200,.14);border:1px solid rgba(80,150,230,.3);
+    border-radius:999px;padding:1px 8px;font-variant-numeric:tabular-nums}
+  .badge.base{color:#ffe6a8;background:rgba(190,150,40,.14);border-color:rgba(210,170,70,.34)}
+  .badge.manual{color:#d8c3ff;background:rgba(120,90,200,.16);border-color:rgba(150,120,230,.34)}
+
+  /* EU/Mistral — sits directly under the results table, centered & prominent */
+  .eublock{width:100%;max-width:520px;display:flex;align-items:center;justify-content:center;gap:24px;
+    border:1px solid #243049;border-radius:16px;
+    background:linear-gradient(180deg,rgba(20,30,55,.6),rgba(10,15,26,.25));padding:12px 24px}
+  .eublock .colhead{height:auto;gap:14px}
+  .eublock .screen{width:160px;height:160px;border:1px solid #4a7bd6;
+    box-shadow:0 0 0 1px rgba(120,170,255,.25), 0 14px 40px -14px rgba(40,90,200,.55)}
+  .eublock .screen iframe{transform:scale(.2)}
+  .eublock .cap{width:auto;text-align:left}
+  .eublock .cap .m{font-size:16px}
+  .eublock .cap .p{font-size:11px}
+
+  /* flags (SVG injected) */
+  .flag{width:78px;height:50px;border-radius:5px;overflow:hidden;position:relative;
+    box-shadow:0 4px 14px -4px rgba(0,0,0,.85), 0 0 0 1px rgba(255,255,255,.12)}
+  .flag svg{display:block;width:100%;height:100%}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="title">
+    <h1><b>Spider Web</b> → Neural Network</h1>
+    <span class="tag">one-shot LLM benchmark · live render</span>
+  </div>
+
+  <div class="main">
+    <!-- LEFT: United States -->
+    <div class="col">
+      <div class="colhead">
+        <div class="flag" id="flag-usa"></div>
+        <div><div class="cname">United States</div>
+             <div class="csub">Anthropic · OpenAI · xAI · Google</div></div>
+      </div>
+      <div class="colstack" data-group="usa"></div>
+    </div>
+
+    <!-- MIDDLE: results -->
+    <div class="mid">
+      <div class="panel">
+        <h2><b>Results</b> — one prompt, one shot</h2>
+        <div class="lead">Identical 239-char prompt, zero-shot. Time/tokens/size = exact telemetry.
+          <b style="color:#ffd34d">Quality</b> = evidence-based review of <b>both the source and the
+          rendered animation</b>, weighted to prompt fidelity (does the woven web actually <i>become</i>
+          the network) and biological realism (organic asymmetry · true thread-by-thread weaving).</div>
+        <table class="tbl">
+          <thead><tr><th>#&nbsp;&nbsp;Model</th><th>Time</th><th>Tokens</th><th>Size</th><th>Quality</th></tr></thead>
+          <tbody>
+            <tr><td class="m"><span class="rk">1</span><span class="dot us"></span>GPT-5.5 <small>OpenAI</small></td><td>157 s</td><td>8.7k</td><td>13.8 KB</td><td class="q">★★★★½ <i>organic · complete</i></td></tr>
+            <tr><td class="m"><span class="rk">2</span><span class="dot us"></span>Claude Opus 4.8 <small>Anthropic</small></td><td>41 s</td><td>4.2k</td><td>7.7 KB</td><td class="q">★★★★½ <i>most authentic weave</i></td></tr>
+            <tr><td class="m"><span class="rk">3</span><span class="dot cn"></span>MiniMax M3 <small>MiniMax</small></td><td>13m 5s</td><td>16.3k</td><td>17.7 KB</td><td class="q">★★★★ <i>best weave behavior</i></td></tr>
+            <tr><td class="m"><span class="rk">4</span><span class="dot cn"></span>DeepSeek V4 Pro <small>DeepSeek</small></td><td>174 s</td><td>16.9k</td><td>40 KB</td><td class="q">★★★★ <i>dense · faithful</i></td></tr>
+            <tr><td class="m"><span class="rk">5</span><span class="dot cn"></span>GLM-5.1 <small>Zhipu</small></td><td>517 s</td><td>29.4k</td><td>13.7 KB</td><td class="q">★★★★ <i>full cycle</i></td></tr>
+            <tr><td class="m"><span class="rk">6</span><span class="dot us"></span>Gemini 3.5 Flash <small>Google</small></td><td>158 s</td><td>9.9k</td><td>37 KB</td><td class="q">★★★½ <i>mild asym · busy HUD</i></td></tr>
+            <tr><td class="m"><span class="rk">7</span><span class="dot us"></span>Grok 4 <small>xAI</small></td><td>26 s</td><td>1.9k</td><td>5.6 KB</td><td class="q">★★½ <i>buggy signals</i></td></tr>
+            <tr><td class="m"><span class="rk">8</span><span class="dot eu"></span>Mistral Large <small>Mistral AI</small></td><td>32 s</td><td>2.7k</td><td>11.6 KB</td><td class="q">★★ <i>random graph</i></td></tr>
+          </tbody>
+        </table>
+        <div class="foot">Only <b>GPT-5.5</b> &amp; <b>Opus 4.8</b> wove <b>organically asymmetric</b>
+          webs (biological realism) with a faithful web→neural transition — the two leaders. The rest
+          are mechanically symmetric; Mistral's "network" is a random graph unrelated to the web.</div>
+      </div>
+      <div class="eublock">
+        <div class="colhead">
+          <div class="flag" id="flag-eu"></div>
+          <div><div class="cname">European Union</div><div class="csub">Mistral AI</div></div>
+        </div>
+        <div data-group="eu" style="display:flex;gap:18px"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: China -->
+    <div class="col">
+      <div class="colhead">
+        <div class="flag" id="flag-china"></div>
+        <div><div class="cname">China</div>
+             <div class="csub">Zhipu · DeepSeek · MiniMax</div></div>
+      </div>
+      <div class="colstack" data-group="china"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function buildFlags(){
+  // 5-point star polygon points (point up) at center (cx,cy) outer radius r
+  function star(cx,cy,r){
+    const inner=r*0.382, p=[];
+    for(let i=0;i<10;i++){ const a=-Math.PI/2+i*Math.PI/5, rr=(i%2?inner:r);
+      p.push((cx+Math.cos(a)*rr).toFixed(2)+","+(cy+Math.sin(a)*rr).toFixed(2)); }
+    return p.join(" ");
+  }
+  const W=78,H=50;
+  // USA
+  let u=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">`;
+  for(let i=0;i<13;i++) u+=`<rect x="0" y="${(i*H/13).toFixed(2)}" width="${W}" height="${(H/13+0.4).toFixed(2)}" fill="${i%2?'#fff':'#b22234'}"/>`;
+  u+=`<rect x="0" y="0" width="${(W*0.4).toFixed(2)}" height="${(7*H/13).toFixed(2)}" fill="#3c3b6e"/>`;
+  for(let row=0;row<5;row++)for(let col=0;col<6;col++){ const x=3.4+col*4.7, y=3.2+row*4.9;
+    u+=`<polygon points="${star(x,y,1.55)}" fill="#fff"/>`; }
+  u+=`</svg>`;
+  document.getElementById("flag-usa").innerHTML=u;
+  // China
+  let c=`<svg viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="#de2910"/>`;
+  c+=`<polygon points="${star(17,15,8.5)}" fill="#ffde00"/>`;
+  [[33,5],[39,11],[39,20],[33,26]].forEach(([x,y])=>c+=`<polygon points="${star(x,y,2.7)}" fill="#ffde00"/>`);
+  c+=`</svg>`;
+  document.getElementById("flag-china").innerHTML=c;
+  // EU
+  let e=`<svg viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="#003399"/>`;
+  for(let i=0;i<12;i++){ const a=-Math.PI/2+i*Math.PI/6, x=W/2+Math.cos(a)*17, y=H/2+Math.sin(a)*17;
+    e+=`<polygon points="${star(x,y,2.7)}" fill="#ffcc00"/>`; }
+  e+=`</svg>`;
+  document.getElementById("flag-eu").innerHTML=e;
+})();
+
+const MODELS={
+  usa:[
+    {id:"claude-opus-4.8", name:"Claude Opus 4.8",  prov:"Anthropic"},
+    {id:"gpt-5.5",         name:"GPT-5.5",          prov:"OpenAI"},
+    {id:"grok-4",          name:"Grok 4",           prov:"xAI"},
+    {id:"gemini-3-pro",    name:"Gemini 3.5 Flash", prov:"Google"},
+  ],
+  china:[
+    {id:"glm-5.1",         name:"GLM-5.1",          prov:"Zhipu"},
+    {id:"deepseek-v4",     name:"DeepSeek V4 Pro",  prov:"DeepSeek"},
+    {id:"minimax-m3",      name:"MiniMax M3",       prov:"MiniMax"},
+  ],
+  eu:[
+    {id:"mistral-large",   name:"Mistral Large",    prov:"Mistral AI"},
+  ],
+};
+
+function badge(meta){
+  if(!meta) return `<span class="badge">—</span>`;
+  const kb=meta.bytes?Math.round(meta.bytes/1024*10)/10+" KB":null;
+  if(meta.latency_s && meta.tokens_out){
+    const tok=meta.tokens_out>=1000?(meta.tokens_out/1000).toFixed(1)+"k":meta.tokens_out;
+    return `<span class="badge">${kb} · ${tok} tok · ${Math.round(meta.latency_s)}s</span>`;
+  }
+  const note=(meta.notes||"").toLowerCase();
+  if(note.includes("baseline")) return `<span class="badge base">baseline · ${kb||""}</span>`;
+  if(note.includes("manual"))   return `<span class="badge manual">manual · ${kb||""}</span>`;
+  return `<span class="badge">${kb||"—"}</span>`;
+}
+
+async function build(){
+  for(const [grp,list] of Object.entries(MODELS)){
+    const host=document.querySelector(`[data-group="${grp}"]`);
+    for(const m of list){
+      let meta=null;
+      try{ const r=await fetch(`../submissions/${m.id}/meta.json`,{cache:"no-store"});
+           if(r.ok) meta=await r.json(); }catch(e){}
+      const tile=document.createElement("div"); tile.className="tile";
+      tile.innerHTML=`
+        <div class="screen"><iframe src="../submissions/${m.id}/index.html?cb=${Date.now()}" scrolling="no"></iframe></div>
+        <div class="cap"><div class="m">${m.name}</div><div class="p">${m.prov}</div>${badge(meta)}</div>`;
+      host.appendChild(tile);
+    }
+  }
+}
+build();
+</script>
+</body>
+</html>

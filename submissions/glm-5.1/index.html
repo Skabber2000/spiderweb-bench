@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Spider Neural Web</title>
+<style>
+  * { margin: 0; padding: 0; }
+  body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: #020201;
+    overflow: hidden;
+  }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c" width="800" height="800"></canvas>
+<script>
+const c = document.getElementById('c');
+const ctx = c.getContext('2d');
+const W = 800, H = 800, cx = 400, cy = 400;
+
+const SPOKES = 16, RINGS = 8, MAX_R = 320;
+const WEAVE_SPEED = 13, NEURAL_DUR = 8, DISSOLVE_DUR = 3.8;
+
+const WEAVING = 0, NEURAL = 1, DISSOLVE = 2, PAUSE = 3;
+
+let phase, phaseT, weaveProgress, globalTime = 0;
+let nodes, edges, weaveOrder;
+let spiderX, spiderY, spiderAngle, spiderWalk, spiderVis;
+let signals, dParts, bgDots;
+let lastTime = 0;
+
+const lerp = (a, b, t) => a + (b - a) * t;
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const rand = (a, b) => a + Math.random() * (b - a);
+
+function buildWeb() {
+  nodes = []; edges = []; weaveOrder = [];
+  weaveProgress = 0; signals = []; dParts = [];
+
+  nodes.push({ x: cx, y: cy, ring: 0, spoke: -1, glow: 0, act: 0 });
+
+  for (let r = 1; r <= RINGS; r++) {
+    for (let s = 0; s < SPOKES; s++) {
+      const a = (s / SPOKES) * Math.PI * 2 - Math.PI / 2;
+      const rad = Math.pow(r / RINGS, 0.85) * MAX_R + rand(-2, 2);
+      const ao = rand(-0.012, 0.012);
+      nodes.push({
+        x: cx + Math.cos(a + ao) * rad,
+        y: cy + Math.sin(a + ao) * rad,
+        ring: r, spoke: s, glow: 0, act: 0
+      });
+    }
+  }
+
+  const nI = (r, s) => r === 0 ? 0 : 1 + (r - 1) * SPOKES + ((s % SPOKES) + SPOKES) % SPOKES;
+
+  for (let s = 0; s < SPOKES; s++) {
+    edges.push({ a: 0, b: nI(1, s), type: 'radial', progress: 0 });
+    weaveOrder.push(edges.length - 1);
+    for (let r = 2; r <= RINGS; r++) {
+      edges.push({ a: nI(r - 1, s), b: nI(r, s), type: 'radial', progress: 0 });
+      weaveOrder.push(edges.length - 1);
+    }
+  }
+
+  for (let r = 1; r <= RINGS; r++) {
+    for (let s = 0; s < SPOKES; s++) {
+      edges.push({ a: nI(r, s), b: nI(r, s + 1), type: 'ring', progress: 0 });
+      weaveOrder.push(edges.length - 1);
+    }
+  }
+}
+
+function initBg() {
+  bgDots = [];
+  for (let i = 0; i < 60; i++) {
+    bgDots.push({
+      x: rand(0, W), y: rand(0, H),
+      vx: rand(-4, 4), vy: rand(-4, 4),
+      sz: rand(0.4, 1.6), al: rand(0.04, 0.18)
+    });
+  }
+}
+
+function eEnds(e) {
+  return { x1: nodes[e.a].x, y1: nodes[e.a].y, x2: nodes[e.b].x, y2: nodes[e.b].y };
+}
+
+/* ── Background ── */
+function drawBg() {
+  const g = ctx.createRadialGradient(cx, cy, 30, cx, cy, 520);
+  g.addColorStop(0, '#100d08');
+  g.addColorStop(1, '#040302');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  bgDots.forEach(d => {
+    d.x += d.vx * 0.016; d.y += d.vy * 0.016;
+    if (d.x < -10) d.x = W + 10; if (d.x > W + 10) d.x = -10;
+    if (d.y < -10) d.y = H + 10; if (d.y > H + 10) d.y = -10;
+    ctx.fillStyle = `rgba(150,130,100,${d.al})`;
+    ctx.beginPath(); ctx.arc(d.x, d.y, d.sz, 0, Math.PI * 2); ctx.fill();
+  });
+
+  const vg = ctx.createRadialGradient(cx, cy, 180, cx, cy, 520);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(0,0,0,0.45)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, W, H);
+}
+
+/* ── Spider ── */
+function drawSpider(x, y, ang, walk, sz) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(ang);
+  const s = sz;
+
+  ctx.strokeStyle = '#2e2418';
+  ctx.lineWidth = 1.3;
+  ctx.lineCap = 'round';
+  for (let side = -1; side <= 1; side += 2) {
+    for (let i = 0; i < 4; i++) {
+      const ph = walk + i * 1.1 + (side > 0 ? Math.PI * 0.5 : 0);
+      const sw = Math.sin(ph) * s * 0.12;
+      const bx = -s * 0.35 + i * s * 0.28;
+      const my = side * (s * 0.55 + Math.sin(ph) * s * 0.08);
+      const ty = side * (s * 1.2 + sw);
+      ctx.beginPath();
+      ctx.moveTo(bx, side * s * 0.12);
+      ctx.quadraticCurveTo(bx - s * 0.18, my, bx + s * 0.06 + sw * 0.3, ty);
+      ctx.stroke();
+    }
+  }
+
+  ctx.fillStyle = '#1a1410';
+  ctx.beginPath(); ctx.ellipse(-s * 0.4, 0, s * 0.58, s * 0.42, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#2a2018';
+  ctx.beginPath(); ctx.ellipse(-s * 0.55, 0, s * 0.13, s * 0.09, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(-s * 0.28, 0, s * 0.1, s * 0.07, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#2a2018'; ctx.lineWidth = 0.7;
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.52, -s * 0.18); ctx.lineTo(-s * 0.28, s * 0.18);
+  ctx.moveTo(-s * 0.52, s * 0.18); ctx.lineTo(-s * 0.28, -s * 0.18);
+  ctx.stroke();
+
+  ctx.fillStyle = '#1a1410';
+  ctx.beginPath(); ctx.ellipse(s * 0.22, 0, s * 0.34, s * 0.24, 0, 0, Math.PI * 2); ctx.fill();
+
+  ctx.fillStyle = '#cc2222';
+  ctx.beginPath(); ctx.arc(s * 0.44, -s * 0.08, 1, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(s * 0.44, s * 0.08, 1, 0, Math.PI * 2); ctx.fill();
+
+  ctx.fillStyle = '#1a1410';
+  ctx.beginPath(); ctx.ellipse(-s * 0.95, -s * 0.04, s * 0.07, s * 0.04, -0.2, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(-s * 0.95, s * 0.04, s * 0.07, s * 0.04, 0.2, 0, Math.PI * 2); ctx.fill();
+
+  ctx.restore();
+}
+
+/* ── Updates ── */
+function updateWeaving(dt) {
+  weaveProgress += WEAVE_SPEED * dt;
+  const idx = Math.floor(weaveProgress);
+
+  for (let i = 0; i < weaveOrder.length; i++) {
+    const ei = weaveOrder[i];
+    if (i < idx) edges[ei].progress = 1;
+    else if (i === idx) edges[ei].progress = clamp(weaveProgress - idx, 0, 1);
+    else edges[ei].progress = 0;
+  }
+
+  spiderVis = true;
+  spiderWalk += dt * 14;
+  if (idx < weaveOrder.length) {
+    const e = edges[weaveOrder[idx]];
+    const t = e.progress;
+    const na = nodes[e.a], nb = nodes[e.b];
+    spiderX = lerp(na.x, nb.x, t);
+    spiderY = lerp(na.y, nb.y, t);
+    spiderAngle = Math.atan2(nb.y - na.y, nb.x - na.x);
+  }
+
+  if (weaveProgress >= weaveOrder.length) {
+    phase = NEURAL; phaseT = 0;
+    edges.forEach(e => e.progress = 1);
+    spiderVis = false;
+  }
+}
+
+function updateNeural(dt) {
+  phaseT += dt;
+  const trans = clamp(phaseT / 2, 0, 1);
+
+  nodes.forEach((n, i) => {
+    n.act *= 0.92;
+    if (i === 0) n.glow = 0.4 + 0.35 * Math.sin(phaseT * 2.5);
+    else n.glow = 0.15 + 0.22 * Math.sin(phaseT * 3 + i * 0.55) + n.act * 0.5;
+  });
+
+  const rate = 7 + phaseT * 1.8;
+  if (Math.random() < rate * dt) {
+    const ei = Math.floor(Math.random() * edges.length);
+    const fwd = Math.random() > 0.5;
+    signals.push({ ei, t: fwd ? 0 : 1, spd: rand(0.7, 2.0) * (fwd ? 1 : -1), life: 1 });
+  }
+
+  signals.forEach(s => {
+    s.t += s.spd * dt;
+    if (s.t > 1) { nodes[edges[s.ei].b].act = 1; s.life = 0; }
+    if (s.t < 0) { nodes[edges[s.ei].a].act = 1; s.life = 0; }
+  });
+  signals = signals.filter(s => s.life > 0);
+
+  if (phaseT > NEURAL_DUR) {
+    phase = DISSOLVE; phaseT = 0;
+    createDissolve();
+  }
+}
+
+function createDissolve() {
+  dParts = [];
+  edges.forEach(e => {
+    const { x1, y1, x2, y2 } = eEnds(e);
+    for (let i = 0; i <= 5; i++) {
+      const t = i / 5;
+      dParts.push({
+        x: lerp(x1, x2, t), y: lerp(y1, y2, t),
+        vx: rand(-22, 22), vy: rand(-28, 8),
+        life: 1, dec: rand(0.18, 0.42), sz: rand(1, 2.8)
+      });
+    }
+  });
+  nodes.forEach((n, i) => {
+    if (i === 0) return;
+    for (let j = 0; j < 5; j++) {
+      const a = rand(0, Math.PI * 2), sp = rand(15, 45);
+      dParts.push({
+        x: n.x, y: n.y,
+        vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+        life: 1, dec: rand(0.12, 0.3), sz: rand(2.5, 5)
+      });
+    }
+  });
+}
+
+function updateDissolve(dt) {
+  phaseT += dt;
+  dParts.forEach(p => {
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.vy += 8 * dt; p.vx *= 0.995;
+    p.life -= p.dec * dt;
+  });
+  dParts = dParts.filter(p => p.life > 0);
+  if (phaseT > DISSOLVE_DUR) { phase = PAUSE; phaseT = 0; }
+}
+
+function updatePause(dt) {
+  phaseT += dt;
+  if (phaseT > 1.2) {
+    buildWeb(); phase = WEAVING; phaseT = 0;
+    spiderX = cx; spiderY = cy; spiderVis = true;
+  }
+}
+
+/* ── Draw Phases ── */
+function drawWeaving() {
+  ctx.lineCap = 'round';
+
+  edges.forEach(e => {
+    if (e.progress <= 0) return;
+    const { x1, y1, x2, y2 } = eEnds(e);
+    const ex = lerp(x1, x2, e.progress), ey = lerp(y1, y2, e.progress);
+
+    ctx.strokeStyle = 'rgba(185,175,158,0.5)';
+    ctx.lineWidth = e.type === 'radial' ? 0.7 : 0.9;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(ex, ey); ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(210,205,190,0.15)';
+    ctx.lineWidth = 0.3;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(ex, ey); ctx.stroke();
+  });
+
+  const vis = new Set();
+  edges.forEach(e => {
+    if (e.progress > 0) vis.add(e.a);
+    if (e.progress >= 1) vis.add(e.b);
+  });
+  vis.forEach(i => {
+    const n = nodes[i];
+    ctx.fillStyle = 'rgba(185,175,158,0.3)';
+    ctx.beginPath(); ctx.arc(n.x, n.y, i === 0 ? 2.5 : 1.5, 0, Math.PI * 2); ctx.fill();
+  });
+
+  edges.forEach(e => {
+    if (e.type !== 'ring' || e.progress < 1) return;
+    const { x1, y1, x2, y2 } = eEnds(e);
+    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+    const sh = 0.12 + 0.08 * Math.sin(globalTime * 2.5 + mx * 0.02 + my * 0.02);
+    ctx.fillStyle = `rgba(210,220,230,${sh})`;
+    ctx.beginPath(); ctx.arc(mx, my, 1, 0, Math.PI * 2); ctx.fill();
+  });
+
+  if (spiderVis) drawSpider(spiderX, spiderY, spiderAngle, spiderWalk, 10);
+}
+
+function drawNeural() {
+  const fi = clamp(phaseT / 1.8, 0, 1);
+  const breath = 0.75 + 0.25 * Math.sin(phaseT * 2.2);
+
+  const ag = ctx.createRadialGradient(cx, cy, 20, cx, cy, MAX_R + 80);
+  ag.addColorStop(0, `rgba(200,125,25,${0.08 * fi * breath})`);
+  ag.addColorStop(1, 'rgba(200,125,25,0)');
+  ctx.fillStyle = ag; ctx.fillRect(0, 0, W, H);
+
+  for (let w = 0; w < 3; w++) {
+    const wT = ((phaseT * 0.7 + w * 1.6) % 4.8);
+    if (wT > 3.5) continue;
+    const wR = (wT / 3.5) * (MAX_R + 40);
+    const wA = (1 - wT / 3.5) * 0.1 * fi;
+    if (wA <= 0) continue;
+    ctx.strokeStyle = `rgba(220,155,40,${wA})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(cx, cy, Math.max(1, wR), 0, Math.PI * 2); ctx.stroke();
+  }
+
+  ctx.save();
+  ctx.shadowColor = '#c07818';
+  ctx.shadowBlur = 6 * fi;
+  ctx.lineWidth = 0.8;
+  edges.forEach(e => {
+    const { x1, y1, x2, y2 } = eEnds(e);
+    ctx.strokeStyle = `rgba(185,135,40,${0.35 * fi * breath})`;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  });
+  ctx.restore();
+
+  ctx.save();
+  ctx.shadowColor = '#ffbb33';
+  ctx.shadowBlur = 12 * fi;
+  nodes.forEach((n, i) => {
+    const g = n.glow * fi;
+    const a = n.act;
+    const r = i === 0 ? 4.5 + g * 3 + a * 4 : 2.5 + g * 2.5 + a * 4;
+    const bright = clamp(0.35 + g * 0.35 + a * 0.3, 0, 1);
+    const green = Math.round(170 + a * 85);
+    const blue = Math.round(50 + a * 120);
+    ctx.fillStyle = `rgba(255,${green},${blue},${bright * fi})`;
+    ctx.beginPath(); ctx.arc(n.x, n.y, Math.max(0.5, r), 0, Math.PI * 2); ctx.fill();
+  });
+  ctx.restore();
+
+  ctx.save();
+  signals.forEach(s => {
+    const e = edges[s.ei];
+    const { x1, y1, x2, y2 } = eEnds(e);
+    const t = clamp(s.t, 0, 1);
+    const sx = lerp(x1, x2, t), sy = lerp(y1, y2, t);
+
+    const tBack = clamp(s.t - s.spd * 0.08, 0, 1);
+    const tx = lerp(x1, x2, tBack), ty = lerp(y1, y2, tBack);
+    const tg = ctx.createLinearGradient(tx, ty, sx, sy);
+    tg.addColorStop(0, 'rgba(255,200,70,0)');
+    tg.addColorStop(1, `rgba(255,215,90,${0.65 * fi})`);
+    ctx.strokeStyle = tg; ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(sx, sy); ctx.stroke();
+
+    ctx.shadowColor = '#fffbe0';
+    ctx.shadowBlur = 10 * fi;
+    ctx.fillStyle = `rgba(255,255,225,${fi})`;
+    ctx.beginPath(); ctx.arc(sx, sy, 2.8, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+  });
+  ctx.restore();
+}
+
+function drawDissolve() {
+  const wf = clamp(1 - phaseT / 1.4, 0, 1);
+
+  if (phaseT < 0.35) {
+    const fl = (1 - phaseT / 0.35) * 0.18;
+    const fg = ctx.createRadialGradient(cx, cy, 0, cx, cy, MAX_R + 30);
+    fg.addColorStop(0, `rgba(255,200,70,${fl})`);
+    fg.addColorStop(1, 'rgba(255,200,70,0)');
+    ctx.fillStyle = fg; ctx.fillRect(0, 0, W, H);
+  }
+
+  if (wf > 0.01) {
+    ctx.save(); ctx.globalAlpha = wf;
+    ctx.strokeStyle = 'rgba(185,135,40,0.28)';
+    ctx.lineWidth = 0.6;
+    edges.forEach(e => {
+      const { x1, y1, x2, y2 } = eEnds(e);
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    });
+    ctx.shadowColor = '#ffbb33'; ctx.shadowBlur = 6 * wf;
+    ctx.fillStyle = 'rgba(255,175,55,0.35)';
+    nodes.forEach((n, i) => {
+      if (i === 0) return;
+      ctx.beginPath(); ctx.arc(n.x, n.y, 2, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.restore();
+  }
+
+  dParts.forEach(p => {
+    const a = clamp(p.life, 0, 1);
+    ctx.save();
+    ctx.shadowColor = `rgba(255,160,30,${a * 0.5})`;
+    ctx.shadowBlur = 4 * a;
+    ctx.fillStyle = `rgba(255,170,45,${a * 0.85})`;
+    ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(0.3, p.sz * (0.4 + a * 0.6)), 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  });
+}
+
+/* ── Main Loop ── */
+function frame(time) {
+  if (!lastTime) lastTime = time;
+  const dt = Math.min(0.05, (time - lastTime) / 1000);
+  lastTime = time;
+  globalTime += dt;
+
+  switch (phase) {
+    case WEAVING:  updateWeaving(dt); break;
+    case NEURAL:   updateNeural(dt); break;
+    case DISSOLVE: updateDissolve(dt); break;
+    case PAUSE:    updatePause(dt); break;
+  }
+
+  drawBg();
+  switch (phase) {
+    case WEAVING:  drawWeaving(); break;
+    case NEURAL:   drawNeural(); break;
+    case DISSOLVE: drawDissolve(); break;
+  }
+
+  requestAnimationFrame(frame);
+}
+
+initBg();
+buildWeb();
+phase = WEAVING; phaseT = 0;
+spiderX = cx; spiderY = cy; spiderAngle = 0; spiderWalk = 0; spiderVis = true;
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

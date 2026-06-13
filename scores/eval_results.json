@@ -1,0 +1,463 @@
+{
+  "claude-opus-4.8": {
+    "display": "Claude Opus 4.8",
+    "family": "claude",
+    "letter": "E",
+    "scores": {
+      "spec": [
+        8.0,
+        9.0,
+        10.0
+      ],
+      "weave": [
+        7.0,
+        10.0,
+        10.0
+      ],
+      "trans": [
+        9.0,
+        10.0,
+        10.0
+      ],
+      "fire": [
+        8.0,
+        9.0,
+        10.0
+      ],
+      "polish": [
+        5.0,
+        2.0,
+        4.0
+      ],
+      "code": [
+        8.0,
+        8.0,
+        9.0
+      ],
+      "perf": [
+        8.0,
+        9.0,
+        8.0
+      ]
+    },
+    "means": {
+      "spec": 9.0,
+      "weave": 9.0,
+      "trans": 9.67,
+      "fire": 9.0,
+      "polish": 3.67,
+      "code": 8.33,
+      "perf": 8.33
+    },
+    "total": 81.7,
+    "n": {
+      "spec": 3,
+      "weave": 3,
+      "trans": 3,
+      "fire": 3,
+      "polish": 3,
+      "code": 3,
+      "perf": 3
+    }
+  },
+  "gpt-5.5": {
+    "display": "GPT-5.5",
+    "family": "gpt",
+    "letter": "A",
+    "scores": {
+      "spec": [
+        10.0,
+        10.0
+      ],
+      "weave": [
+        9.0,
+        10.0
+      ],
+      "trans": [
+        10.0,
+        10.0
+      ],
+      "fire": [
+        9.0,
+        7.0
+      ],
+      "polish": [
+        3.0,
+        4.0
+      ],
+      "code": [
+        9.0,
+        9.0
+      ],
+      "perf": [
+        9.0,
+        9.0
+      ]
+    },
+    "means": {
+      "spec": 10.0,
+      "weave": 9.5,
+      "trans": 10.0,
+      "fire": 8.0,
+      "polish": 3.5,
+      "code": 9.0,
+      "perf": 9.0
+    },
+    "total": 84.5,
+    "n": {
+      "spec": 2,
+      "weave": 2,
+      "trans": 2,
+      "fire": 2,
+      "polish": 2,
+      "code": 2,
+      "perf": 2
+    }
+  },
+  "grok-4": {
+    "display": "Grok 4",
+    "family": "grok",
+    "letter": "H",
+    "scores": {
+      "spec": [
+        7.0,
+        9.0
+      ],
+      "weave": [
+        2.0,
+        2.0
+      ],
+      "trans": [
+        6.0,
+        10.0
+      ],
+      "fire": [
+        4.0,
+        5.0
+      ],
+      "polish": [
+        6.0,
+        4.0
+      ],
+      "code": [
+        7.0,
+        8.0
+      ],
+      "perf": [
+        8.0,
+        10.0
+      ]
+    },
+    "means": {
+      "spec": 8.0,
+      "weave": 2.0,
+      "trans": 8.0,
+      "fire": 4.5,
+      "polish": 5.0,
+      "code": 7.5,
+      "perf": 9.0
+    },
+    "total": 61.8,
+    "n": {
+      "spec": 2,
+      "weave": 2,
+      "trans": 2,
+      "fire": 2,
+      "polish": 2,
+      "code": 2,
+      "perf": 2
+    }
+  },
+  "gemini-3-pro": {
+    "display": "Gemini 3.5 Flash",
+    "family": "gemini",
+    "letter": "C",
+    "scores": {
+      "spec": [
+        9.0,
+        10.0,
+        10.0
+      ],
+      "weave": [
+        9.0,
+        9.0,
+        10.0
+      ],
+      "trans": [
+        10.0,
+        10.0,
+        10.0
+      ],
+      "fire": [
+        9.0,
+        9.0,
+        10.0
+      ],
+      "polish": [
+        6.0,
+        5.0
+      ],
+      "code": [
+        8.0,
+        9.0,
+        10.0
+      ],
+      "perf": [
+        9.0,
+        9.0,
+        10.0
+      ]
+    },
+    "means": {
+      "spec": 9.67,
+      "weave": 9.33,
+      "trans": 10.0,
+      "fire": 9.33,
+      "polish": 5.5,
+      "code": 9.0,
+      "perf": 9.33
+    },
+    "total": 88.9,
+    "n": {
+      "spec": 3,
+      "weave": 3,
+      "trans": 3,
+      "fire": 3,
+      "polish": 2,
+      "code": 3,
+      "perf": 3
+    }
+  },
+  "glm-5.1": {
+    "display": "GLM-5.1",
+    "family": "glm",
+    "letter": "F",
+    "scores": {
+      "spec": [
+        9.0,
+        9.0,
+        10.0
+      ],
+      "weave": [
+        7.0,
+        10.0,
+        9.0
+      ],
+      "trans": [
+        10.0,
+        10.0,
+        10.0
+      ],
+      "fire": [
+        8.0,
+        9.0,
+        8.0
+      ],
+      "polish": [
+        5.0,
+        3.0,
+        4.0
+      ],
+      "code": [
+        9.0,
+        9.0,
+        9.0
+      ],
+      "perf": [
+        9.0,
+        9.0,
+        10.0
+      ]
+    },
+    "means": {
+      "spec": 9.33,
+      "weave": 8.67,
+      "trans": 10.0,
+      "fire": 8.33,
+      "polish": 4.0,
+      "code": 9.0,
+      "perf": 9.33
+    },
+    "total": 83.5,
+    "n": {
+      "spec": 3,
+      "weave": 3,
+      "trans": 3,
+      "fire": 3,
+      "polish": 3,
+      "code": 3,
+      "perf": 3
+    }
+  },
+  "deepseek-v4": {
+    "display": "DeepSeek V4 Pro",
+    "family": "deepseek",
+    "letter": "B",
+    "scores": {
+      "spec": [
+        9.0,
+        9.0
+      ],
+      "weave": [
+        5.0,
+        10.0
+      ],
+      "trans": [
+        8.0,
+        10.0
+      ],
+      "fire": [
+        7.0,
+        9.0
+      ],
+      "polish": [
+        6.5,
+        4.0,
+        8.0
+      ],
+      "code": [
+        8.0,
+        9.0
+      ],
+      "perf": [
+        7.0,
+        9.0
+      ]
+    },
+    "means": {
+      "spec": 9.0,
+      "weave": 7.5,
+      "trans": 9.0,
+      "fire": 8.0,
+      "polish": 6.17,
+      "code": 8.5,
+      "perf": 8.0
+    },
+    "total": 80.5,
+    "n": {
+      "spec": 2,
+      "weave": 2,
+      "trans": 2,
+      "fire": 2,
+      "polish": 3,
+      "code": 2,
+      "perf": 2
+    }
+  },
+  "minimax-m3": {
+    "display": "MiniMax M3",
+    "family": "minimax",
+    "letter": "G",
+    "scores": {
+      "spec": [
+        9.0,
+        9.0,
+        10.0
+      ],
+      "weave": [
+        8.0,
+        10.0,
+        9.0
+      ],
+      "trans": [
+        7.0,
+        9.0,
+        8.0
+      ],
+      "fire": [
+        7.0,
+        8.0,
+        9.0
+      ],
+      "polish": [
+        6.0,
+        7.0,
+        8.0
+      ],
+      "code": [
+        9.0,
+        9.0,
+        10.0
+      ],
+      "perf": [
+        8.0,
+        9.0,
+        9.0
+      ]
+    },
+    "means": {
+      "spec": 9.33,
+      "weave": 9.0,
+      "trans": 8.0,
+      "fire": 8.0,
+      "polish": 7.0,
+      "code": 9.33,
+      "perf": 8.67
+    },
+    "total": 84.7,
+    "n": {
+      "spec": 3,
+      "weave": 3,
+      "trans": 3,
+      "fire": 3,
+      "polish": 3,
+      "code": 3,
+      "perf": 3
+    }
+  },
+  "mistral-large": {
+    "display": "Mistral Large",
+    "family": "mistral",
+    "letter": "D",
+    "scores": {
+      "spec": [
+        4.0,
+        6.0
+      ],
+      "weave": [
+        2.0,
+        5.0
+      ],
+      "trans": [
+        0.0,
+        0.0
+      ],
+      "fire": [
+        6.0,
+        7.0
+      ],
+      "polish": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "code": [
+        6.0,
+        7.0
+      ],
+      "perf": [
+        8.0,
+        8.0
+      ]
+    },
+    "means": {
+      "spec": 5.0,
+      "weave": 3.5,
+      "trans": 0.0,
+      "fire": 6.5,
+      "polish": 2.0,
+      "code": 6.5,
+      "perf": 8.0
+    },
+    "total": 42.5,
+    "n": {
+      "spec": 2,
+      "weave": 2,
+      "trans": 2,
+      "fire": 2,
+      "polish": 3,
+      "code": 2,
+      "perf": 2
+    }
+  }
+}

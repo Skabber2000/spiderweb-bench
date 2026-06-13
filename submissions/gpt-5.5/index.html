@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Spider Web Neural Loop</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #02040a;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+  }
+  canvas {
+    width: 800px;
+    height: 800px;
+    display: block;
+    background: #02040a;
+    box-shadow: 0 0 80px rgba(40,120,255,.18), inset 0 0 80px rgba(0,0,0,.8);
+  }
+</style>
+</head>
+<body>
+<canvas id="c" width="800" height="800"></canvas>
+<script>
+(() => {
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d");
+  const W = 800, H = 800;
+  const TAU = Math.PI * 2;
+
+  const WEAVE_DUR = 16500;
+  const NEURAL_DUR = 7600;
+  const DISSOLVE_DUR = 4300;
+
+  let state = "weaving";
+  let stateStart = performance.now();
+  let last = stateStart;
+  let web = makeWeb();
+  let signals = [];
+  let dissolvers = [];
+  let stars = Array.from({length: 170}, () => ({
+    x: Math.random() * W,
+    y: Math.random() * H,
+    r: Math.random() * 1.25 + .15,
+    a: Math.random() * .35 + .05,
+    s: Math.random() * 3 + .7
+  }));
+
+  function rnd(a, b) { return a + Math.random() * (b - a); }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function easeInOut(t) { return t < .5 ? 2*t*t : 1 - Math.pow(-2*t+2, 2)/2; }
+  function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+  function dist(a, b) { return Math.hypot(a.x-b.x, a.y-b.y); }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function mix(a, b, t) { return {x: lerp(a.x,b.x,t), y: lerp(a.y,b.y,t)}; }
+
+  function makeWeb() {
+    const spokes = 18 + Math.floor(Math.random() * 4);
+    const rings = 8;
+    const center = { x: rnd(382, 418), y: rnd(350, 394) };
+    const maxR = rnd(302, 338);
+    const ovalX = rnd(.94, 1.08);
+    const ovalY = rnd(.80, .91);
+    const baseRot = rnd(-.18, .18) - Math.PI/2;
+
+    const angles = [];
+    for (let i = 0; i < spokes; i++) {
+      angles.push(baseRot + i * TAU / spokes + rnd(-.035, .035));
+    }
+
+    const points = [];
+    for (let r = 1; r <= rings; r++) {
+      const f = r / rings;
+      const radius = 35 + Math.pow(f, 1.06) * (maxR - 35);
+      const row = [];
+      for (let i = 0; i < spokes; i++) {
+        const wob = 1 + .045 * Math.sin(i * 1.7 + r * .93) + rnd(-.045, .045);
+        const rr = radius * wob;
+        row.push({
+          x: center.x + Math.cos(angles[i]) * rr * ovalX,
+          y: center.y + Math.sin(angles[i]) * rr * ovalY
+        });
+      }
+      points.push(row);
+    }
+
+    const point = (r, i) => r === 0 ? center : points[r-1][((i % spokes) + spokes) % spokes];
+
+    const path = [];
+    const add = (a, b, visible, scale = 1) => {
+      const len = dist(a, b);
+      path.push({ a, b, visible, len, travel: len * scale });
+    };
+
+    for (let i = 0; i < spokes; i++) {
+      for (let r = 0; r < rings; r++) add(point(r, i), point(r+1, i), true, 1);
+      add(point(rings, i), center, false, .23);
+    }
+
+    add(center, point(1, 0), false, .25);
+    for (let r = 1; r <= rings; r++) {
+      for (let i = 0; i < spokes; i++) add(point(r, i), point(r, i+1), true, 1);
+      if (r < rings) add(point(r, 0), point(r+1, 0), false, .35);
+    }
+
+    const edges = path.filter(p => p.visible).map(p => ({a:p.a, b:p.b, len:p.len}));
+    const nodes = [center];
+    for (let r = 1; r <= rings; r++) for (let i = 0; i < spokes; i++) nodes.push(points[r-1][i]);
+
+    let total = 0;
+    for (const p of path) total += p.travel;
+
+    return { spokes, rings, center, points, point, path, edges, nodes, total };
+  }
+
+  function background(t) {
+    ctx.globalCompositeOperation = "source-over";
+    const g = ctx.createRadialGradient(W*.52,H*.42,20,W*.5,H*.5,590);
+    g.addColorStop(0, "#08152a");
+    g.addColorStop(.48, "#030814");
+    g.addColorStop(1, "#000107");
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,W,H);
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (const s of stars) {
+      const tw = s.a * (.65 + .35 * Math.sin(t * .001 * s.s + s.x));
+      ctx.fillStyle = `rgba(120,180,255,${tw})`;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    const vg = ctx.createRadialGradient(W/2,H/2,260,W/2,H/2,590);
+    vg.addColorStop(0, "rgba(0,0,0,0)");
+    vg.addColorStop(1, "rgba(0,0,0,.64)");
+    ctx.fillStyle = vg;
+    ctx.fillRect(0,0,W,H);
+  }
+
+  function drawLine(a, b, color, width = 1, glow = 0) {
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    if (glow) {
+      ctx.shadowColor = color;
+      ctx.shadowBlur = glow;
+    }
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function getWeavePosition(d) {
+    let acc = 0;
+    for (const s of web.path) {
+      if (d <= acc + s.travel) {
+        const u = clamp((d - acc) / s.travel, 0, 1);
+        const p = mix(s.a, s.b, u);
+        return { p, angle: Math.atan2(s.b.y-s.a.y, s.b.x-s.a.x), seg: s, u };
+      }
+      acc += s.travel;
+    }
+    const lastSeg = web.path[web.path.length - 1];
+    return { p: lastSeg.b, angle: 0, seg: lastSeg, u: 1 };
+  }
+
+  function drawWeaving(elapsed, t) {
+    const k = clamp(elapsed / WEAVE_DUR, 0, 1);
+    const d = web.total * k;
+    const complete = easeOut(k);
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+
+    let acc = 0;
+    for (const s of web.path) {
+      if (!s.visible) {
+        acc += s.travel;
+        continue;
+      }
+
+      if (d >= acc + s.travel) {
+        const pulse = .18 + .13 * Math.sin(t*.003 + s.a.x*.02);
+        drawLine(s.a, s.b, `rgba(175,215,255,${pulse + complete*.12})`, 1.15, 2);
+      } else if (d > acc) {
+        const u = clamp((d - acc) / s.travel, 0, 1);
+        const p = mix(s.a, s.b, u);
+        drawLine(s.a, p, "rgba(235,248,255,.88)", 1.7, 10);
+        drawLine(s.a, p, "rgba(130,210,255,.35)", 4, 16);
+      }
+      acc += s.travel;
+    }
+
+    for (let i = 0; i < web.nodes.length; i += 3) {
+      const n = web.nodes[i];
+      if (Math.random() < .01) {
+        ctx.fillStyle = "rgba(220,245,255,.32)";
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, rnd(.6, 1.7), 0, TAU);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+
+    const pos = getWeavePosition(d);
+    if (pos.seg && !pos.seg.visible) {
+      drawLine(pos.seg.a, pos.p, "rgba(150,190,230,.13)", .8, 1);
+    }
+    drawSpider(pos.p.x, pos.p.y, pos.angle, t, 1);
+  }
+
+  function drawSpider(x, y, angle, t, alpha) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.globalAlpha = alpha;
+
+    ctx.shadowColor = "rgba(0,0,0,.9)";
+    ctx.shadowBlur = 8;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    const legT = t * .012;
+    for (let side of [-1, 1]) {
+      for (let i = 0; i < 4; i++) {
+        const baseX = -7 + i * 4.4;
+        const step = Math.sin(legT + i * 1.8 + (side > 0 ? .7 : 0)) * 3.2;
+        const midX = baseX + 5 + step;
+        const midY = side * (10 + i * 2.2);
+        const endX = baseX + rnd(-.1,.1) + 12 + i * 1.5 + step * .7;
+        const endY = side * (22 + i * 3.2);
+        ctx.strokeStyle = "rgba(4,5,7,.96)";
+        ctx.lineWidth = 3.2;
+        ctx.beginPath();
+        ctx.moveTo(baseX, side * 4);
+        ctx.quadraticCurveTo(midX, midY, endX, endY);
+        ctx.stroke();
+
+        ctx.strokeStyle = "rgba(58,37,25,.78)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(baseX, side * 4);
+        ctx.quadraticCurveTo(midX, midY, endX, endY);
+        ctx.stroke();
+      }
+    }
+
+    const bodyGrad = ctx.createRadialGradient(-5,-3,1,-3,0,15);
+    bodyGrad.addColorStop(0, "#2b160f");
+    bodyGrad.addColorStop(.48, "#080706");
+    bodyGrad.addColorStop(1, "#010101");
+
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    ctx.ellipse(-5, 0, 11, 8.5, 0, 0, TAU);
+    ctx.fill();
+
+    ctx.fillStyle = "#060505";
+    ctx.beginPath();
+    ctx.ellipse(7, 0, 7.5, 6.2, 0, 0, TAU);
+    ctx.fill();
+
+    ctx.shadowColor = "rgba(255,40,30,.85)";
+    ctx.shadowBlur = 6;
+    ctx.fillStyle = "rgba(255,42,35,.95)";
+    ctx.beginPath();
+    ctx.arc(12, -2.4, 1.2, 0, TAU);
+    ctx.arc(12, 2.4, 1.2, 0, TAU);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawNeural(elapsed, dt, t) {
+    const enter = easeOut(clamp(elapsed / 1500, 0, 1));
+    const breathe = .8 + .2 * Math.sin(t * .0025);
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+
+    for (const e of web.edges) {
+      drawLine(e.a, e.b, `rgba(42,210,255,${.09 * enter})`, 4.5, 16);
+      drawLine(e.a, e.b, `rgba(180,70,255,${.07 * enter})`, 2.3, 18);
+      drawLine(e.a, e.b, `rgba(190,245,255,${(.23 + .08*breathe) * enter})`, 1.05, 5);
+    }
+
+    const spawnChance = dt * .011;
+    if (Math.random() < spawnChance) spawnSignal();
+    if (Math.random() < spawnChance * .75) spawnSignal();
+
+    for (let i = signals.length - 1; i >= 0; i--) {
+      const s = signals[i];
+      const age = t - s.birth;
+      const p = age / s.life;
+      if (p >= 1) {
+        signals.splice(i, 1);
+        continue;
+      }
+      const u = s.reverse ? 1 - p : p;
+      const q1 = clamp(u - .075, 0, 1);
+      const q2 = clamp(u, 0, 1);
+      const a = mix(s.edge.a, s.edge.b, q1);
+      const b = mix(s.edge.a, s.edge.b, q2);
+      const node = mix(s.edge.a, s.edge.b, u);
+      const fade = Math.sin(Math.PI * p);
+      const col = `hsla(${s.hue},100%,68%,${fade})`;
+
+      drawLine(a, b, col, 4.3, 22);
+
+      ctx.fillStyle = col;
+      ctx.shadowColor = col;
+      ctx.shadowBlur = 22;
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, 3.2 + 2.5 * fade, 0, TAU);
+      ctx.fill();
+    }
+
+    for (let i = 0; i < web.nodes.length; i++) {
+      const n = web.nodes[i];
+      const r = i === 0 ? 5.5 : 2.4 + 1.2 * Math.sin(t*.004 + i);
+      const a = (i === 0 ? .75 : .42) * enter;
+      ctx.fillStyle = `rgba(130,235,255,${a})`;
+      ctx.shadowColor = i === 0 ? "rgba(180,70,255,.95)" : "rgba(40,220,255,.9)";
+      ctx.shadowBlur = i === 0 ? 24 : 12;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, r, 0, TAU);
+      ctx.fill();
+
+      ctx.fillStyle = `rgba(255,255,255,${.38 * enter})`;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, Math.max(1, r*.34), 0, TAU);
+      ctx.fill();
+    }
+
+    ctx.restore();
+
+    const orbit = elapsed * .0016;
+    const sx = web.center.x + Math.cos(orbit) * 28;
+    const sy = web.center.y + Math.sin(orbit * 1.4) * 20;
+    drawSpider(sx, sy, orbit + Math.PI/2, t, .82);
+  }
+
+  function spawnSignal() {
+    const edge = web.edges[Math.floor(Math.random() * web.edges.length)];
+    signals.push({
+      edge,
+      birth: performance.now(),
+      life: rnd(520, 1450),
+      hue: Math.random() < .5 ? rnd(185, 205) : rnd(265, 295),
+      reverse: Math.random() < .5
+    });
+    if (signals.length > 90) signals.shift();
+  }
+
+  function createDissolve() {
+    dissolvers = [];
+    for (const e of web.edges) {
+      const n = Math.max(1, Math.floor(e.len / 18));
+      for (let i = 0; i <= n; i++) {
+        if (Math.random() < .68) {
+          const p = mix(e.a, e.b, i / n);
+          addDissolver(p.x + rnd(-1,1), p.y + rnd(-1,1), false);
+        }
+      }
+    }
+    for (const n of web.nodes) addDissolver(n.x, n.y, true);
+  }
+
+  function addDissolver(x, y, node) {
+    const dx = x - web.center.x, dy = y - web.center.y;
+    const m = Math.hypot(dx, dy) || 1;
+    const speed = node ? rnd(35, 95) : rnd(18, 72);
+    dissolvers.push({
+      x, y,
+      vx: dx / m * speed + rnd(-35,35),
+      vy: dy / m * speed + rnd(-35,35),
+      r: node ? rnd(1.7, 3.8) : rnd(.6, 1.8),
+      hue: Math.random() < .58 ? rnd(185,205) : rnd(260,295),
+      seed: Math.random() * TAU
+    });
+  }
+
+  function drawDissolve(elapsed, t) {
+    const p = clamp(elapsed / DISSOLVE_DUR, 0, 1);
+    const left = 1 - p;
+    const fade = left * left;
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+
+    for (const e of web.edges) {
+      drawLine(e.a, e.b, `rgba(80,220,255,${.18 * fade})`, 2.5, 14 * left);
+      drawLine(e.a, e.b, `rgba(210,80,255,${.08 * fade})`, 1.2, 12 * left);
+    }
+
+    for (const part of dissolvers) {
+      const wob = Math.sin(t * .004 + part.seed) * 18 * p;
+      const x = part.x + part.vx * p * 2.9 + wob;
+      const y = part.y + part.vy * p * 2.9 + p * p * 55 + Math.cos(t*.003 + part.seed) * 12 * p;
+      const a = Math.pow(left, 1.35) * (.35 + .65*Math.sin(Math.PI*p));
+      const col = `hsla(${part.hue},100%,70%,${a})`;
+      ctx.fillStyle = col;
+      ctx.shadowColor = col;
+      ctx.shadowBlur = 14 * left;
+      ctx.beginPath();
+      ctx.arc(x, y, part.r * (1 + p * 1.7), 0, TAU);
+      ctx.fill();
+    }
+
+    ctx.restore();
+
+    const sx = lerp(web.center.x, 400, p);
+    const sy = lerp(web.center.y, 90, easeInOut(p));
+    drawLine({x:sx, y:0}, {x:sx, y:sy}, `rgba(190,230,255,${.22*left})`, .8, 4);
+    drawSpider(sx, sy, -Math.PI/2, t, left);
+  }
+
+  function frame(now) {
+    const dt = Math.min(50, now - last);
+    last = now;
+    background(now);
+
+    const elapsed = now - stateStart;
+
+    if (state === "weaving") {
+      drawWeaving(elapsed, now);
+      if (elapsed >= WEAVE_DUR) {
+        state = "neural";
+        stateStart = now;
+        signals = [];
+      }
+    } else if (state === "neural") {
+      drawNeural(elapsed, dt, now);
+      if (elapsed >= NEURAL_DUR) {
+        state = "dissolve";
+        stateStart = now;
+        createDissolve();
+      }
+    } else if (state === "dissolve") {
+      drawDissolve(elapsed, now);
+      if (elapsed >= DISSOLVE_DUR) {
+        web = makeWeb();
+        signals = [];
+        dissolvers = [];
+        state = "weaving";
+        stateStart = now;
+      }
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

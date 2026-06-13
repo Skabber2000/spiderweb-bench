@@ -1,0 +1,10 @@
+{
+  "model": "exact-model-id-you-called",
+  "provider": "Vendor",
+  "date": "YYYY-MM-DD",
+  "tokens_out": null,
+  "latency_s": null,
+  "bytes": null,
+  "has_canvas": null,
+  "notes": "one-shot, default temperature, no follow-ups"
+}

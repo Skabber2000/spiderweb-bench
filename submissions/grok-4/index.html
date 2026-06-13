@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Spider Web Neural Loop</title>
+<style>
+body { margin:0; background:#000; display:flex; align-items:center; justify-content:center; height:100vh; }
+canvas { border:1px solid #222; }
+</style>
+</head>
+<body>
+<canvas id="c" width="800" height="800"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+let phase = 'weaving';
+let t = 0;
+let webProgress = 0;
+let dissolveProgress = 0;
+let signals = [];
+let nodes = [];
+let edges = [];
+let spider = { x: 400, y: 400, angle: 0 };
+
+const centerX = 400;
+const centerY = 400;
+const radii = 8;
+const rings = 6;
+const radiusStep = 55;
+
+function createWebStructure() {
+  nodes = [];
+  edges = [];
+  // radial nodes
+  for (let r = 0; r < radii; r++) {
+    const angle = (r / radii) * Math.PI * 2;
+    for (let ring = 1; ring <= rings; ring++) {
+      const dist = ring * radiusStep;
+      nodes.push({
+        x: centerX + Math.cos(angle) * dist,
+        y: centerY + Math.sin(angle) * dist,
+        ring, r
+      });
+    }
+  }
+  // center node
+  nodes.push({ x: centerX, y: centerY, ring: 0, r: -1 });
+  
+  // edges
+  // radials
+  for (let r = 0; r < radii; r++) {
+    for (let ring = 0; ring < rings; ring++) {
+      const a = nodes.find(n => n.r === r && n.ring === ring);
+      const b = nodes.find(n => n.r === r && n.ring === ring + 1);
+      if (a && b) edges.push({ a, b });
+    }
+  }
+  // rings
+  for (let ring = 1; ring <= rings; ring++) {
+    for (let r = 0; r < radii; r++) {
+      const a = nodes.find(n => n.r === r && n.ring === ring);
+      const b = nodes.find(n => n.r === (r + 1) % radii && n.ring === ring);
+      if (a && b) edges.push({ a, b });
+    }
+  }
+}
+
+function drawSpider(x, y, angle) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  
+  // body
+  ctx.fillStyle = '#111';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 9, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // abdomen
+  ctx.fillStyle = '#222';
+  ctx.beginPath();
+  ctx.ellipse(-7, 0, 7, 9, 0, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // red mark
+  ctx.fillStyle = '#c00';
+  ctx.fillRect(-10, -2, 5, 4);
+  
+  // legs
+  ctx.strokeStyle = '#111';
+  ctx.lineWidth = 1.5;
+  for (let i = -1; i <= 1; i += 2) {
+    for (let j = 0; j < 4; j++) {
+      ctx.beginPath();
+      ctx.moveTo(0, i * 3);
+      ctx.quadraticCurveTo(
+        8 + j * 2, i * (8 + j * 2),
+        16 + j * 3, i * (12 + j * 1.5)
+      );
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+function drawWeb(progress) {
+  ctx.strokeStyle = '#555';
+  ctx.lineWidth = 1.2;
+  
+  // radials
+  for (let r = 0; r < radii; r++) {
+    const angle = (r / radii) * Math.PI * 2;
+    const len = Math.min(progress * 400, 400);
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    ctx.lineTo(
+      centerX + Math.cos(angle) * len,
+      centerY + Math.sin(angle) * len
+    );
+    ctx.stroke();
+  }
+  
+  // rings
+  const ringProg = Math.max(0, (progress - 0.4) / 0.6);
+  for (let ring = 1; ring <= rings; ring++) {
+    if (ringProg * rings < ring) continue;
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, ring * radiusStep, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
+function drawNeural() {
+  // connections
+  ctx.strokeStyle = '#334455';
+  ctx.lineWidth = 1.5;
+  ctx.shadowColor = '#4488ff';
+  ctx.shadowBlur = 8;
+  
+  edges.forEach(edge => {
+    ctx.beginPath();
+    ctx.moveTo(edge.a.x, edge.a.y);
+    ctx.lineTo(edge.b.x, edge.b.y);
+    ctx.stroke();
+  });
+  
+  ctx.shadowBlur = 0;
+  
+  // nodes
+  ctx.fillStyle = '#aaccff';
+  nodes.forEach(node => {
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+function updateSignals() {
+  // spawn
+  if (Math.random() < 0.35) {
+    const edge = edges[Math.floor(Math.random() * edges.length)];
+    signals.push({
+      edge,
+      prog: 0,
+      speed: 0.018 + Math.random() * 0.014
+    });
+  }
+  
+  // update
+  for (let i = signals.length - 1; i >= 0; i--) {
+    const s = signals[i];
+    s.prog += s.speed;
+    if (s.prog >= 1) signals.splice(i, 1);
+  }
+}
+
+function drawSignals() {
+  ctx.shadowColor = '#aaffff';
+  ctx.shadowBlur = 12;
+  ctx.fillStyle = '#eeffff';
+  
+  signals.forEach(s => {
+    const { a, b } = s.edge;
+    const x = a.x + (b.x - a.x) * s.prog;
+    const y = a.y + (b.y - a.y) * s.prog;
+    
+    ctx.beginPath();
+    ctx.arc(x, y, 2.2, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  
+  ctx.shadowBlur = 0;
+}
+
+function loop() {
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.fillRect(0, 0, 800, 800);
+  
+  t++;
+  
+  if (phase === 'weaving') {
+    webProgress = Math.min(webProgress + 0.008, 1);
+    drawWeb(webProgress);
+    
+    // spider position along radials
+    const radIndex = Math.floor(webProgress * radii * 1.6) % radii;
+    const angle = (radIndex / radii) * Math.PI * 2;
+    const dist = Math.min(webProgress * 380, 380);
+    spider.x = centerX + Math.cos(angle) * dist;
+    spider.y = centerY + Math.sin(angle) * dist;
+    spider.angle = angle + Math.PI / 2;
+    
+    drawSpider(spider.x, spider.y, spider.angle);
+    
+    if (webProgress >= 1) {
+      phase = 'network';
+      createWebStructure();
+      signals = [];
+      webProgress = 0;
+    }
+  } 
+  else if (phase === 'network') {
+    drawNeural();
+    updateSignals();
+    drawSignals();
+    
+    if (t % 420 === 0) {
+      phase = 'dissolve';
+      dissolveProgress = 0;
+    }
+  } 
+  else if (phase === 'dissolve') {
+    dissolveProgress += 0.025;
+    ctx.globalAlpha = Math.max(0, 1 - dissolveProgress);
+    drawNeural();
+    ctx.globalAlpha = 1;
+    
+    if (dissolveProgress >= 1) {
+      phase = 'weaving';
+      signals = [];
+      nodes = [];
+      edges = [];
+      t = 0;
+    }
+  }
+  
+  requestAnimationFrame(loop);
+}
+
+// start
+createWebStructure();
+nodes = [];
+edges = [];
+loop();
+</script>
+</body>
+</html>

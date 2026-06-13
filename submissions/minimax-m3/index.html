@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>spider · web · synapse</title>
+<style>
+  html, body {
+    margin: 0; padding: 0;
+    background: #02020a;
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'SF Mono', 'Courier New', monospace;
+    overflow: hidden;
+    color: #556;
+  }
+  .wrap { position: relative; }
+  canvas {
+    display: block;
+    width: min(95vw, 95vh);
+    height: auto;
+    aspect-ratio: 1 / 1;
+    background: radial-gradient(ellipse at center, #0a0a18 0%, #020208 70%);
+    box-shadow:
+      0 0 80px rgba(60, 120, 200, 0.15),
+      0 0 220px rgba(20, 60, 120, 0.10),
+      inset 0 0 120px rgba(0, 0, 0, 0.5);
+    border-radius: 6px;
+  }
+  .ui {
+    position: absolute;
+    top: 14px; left: 16px; right: 16px;
+    display: flex; justify-content: space-between;
+    color: #557;
+    font-size: 10px; letter-spacing: 3px;
+    text-transform: uppercase;
+    pointer-events: none;
+  }
+  .label {
+    position: absolute;
+    bottom: -26px; left: 0; right: 0;
+    text-align: center;
+    color: #335;
+    font-size: 10px; letter-spacing: 4px;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <canvas id="c" width="800" height="800"></canvas>
+  <div class="ui">
+    <span>phase · <span id="phase-name">weave</span></span>
+    <span>cycle · <span id="cycle-count">001</span></span>
+  </div>
+  <div class="label">arachnid · silk · synapse</div>
+</div>
+<script>
+(() => {
+  'use strict';
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const CX = W/2, CY = H/2;
+  const phaseLabel = document.getElementById('phase-name');
+  const cycleCountEl = document.getElementById('cycle-count');
+
+  // === Web geometry ===
+  const NUM_RADIALS    = 12;
+  const RADIAL_LENGTH  = 360;
+  const SPIRAL_STEPS   = 96;   // 8 wraps of 12
+  const SPIRAL_START_R = 52;
+  const SPIRAL_END_R   = 340;
+
+  // === Timing (seconds) ===
+  const RADIAL_DRAW_T   = 0.9;
+  const RADIAL_RETURN_T = 0.4;
+  const RADIAL_TOTAL    = RADIAL_DRAW_T + RADIAL_RETURN_T;
+  const SPIRAL_TOTAL    = 10;
+  const NETWORK_T       = 9;
+  const DISSOLVE_T      = 2.5;
+
+  // === State ===
+  let state = 'radial';
+  let stateStart = 0;
+  let cycleT = 0;
+  let lastRealT = performance.now() / 1000;
+  let cycleNum = 1;
+
+  const radials       = [];
+  const spiralPoints  = [];
+  const spiralConns   = [];
+  const nodes         = [];
+  const signals       = [];
+  const particles     = [];
+
+  const spider = {
+    x: CX, y: CY, angle: -Math.PI/2,
+    legPhase: 0, visible: true, alpha: 1, scale: 1
+  };
+
+  // === Helpers ===
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+  const easeInOut = t => t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t+2, 2)/2;
+
+  // === Init web geometry ===
+  function initWeb() {
+    radials.length = 0;
+    for (let i = 0; i < NUM_RADIALS; i++) {
+      const angle = (i / NUM_RADIALS) * Math.PI * 2 - Math.PI/2;
+      radials.push({
+        angle,
+        endX: CX + Math.cos(angle) * RADIAL_LENGTH,
+        endY: CY + Math.sin(angle) * RADIAL_LENGTH,
+        drawn: 0, glow: 0
+      });
+    }
+    spiralPoints.length = 0;
+    spiralConns.length = 0;
+    for (let i = 0; i <= SPIRAL_STEPS; i++) {
+      const u = i / SPIRAL_STEPS;
+      const r = SPIRAL_START_R + (SPIRAL_END_R - SPIRAL_START_R) * u;
+      const angle = -Math.PI/2 + (i / NUM_RADIALS) * Math.PI * 2;
+      const radialIdx = i % NUM_RADIALS;
+      spiralPoints.push({
+        x: CX + Math.cos(angle) * r,
+        y: CY + Math.sin(angle) * r,
+        r, angle, radialIdx, drawn: 0
+      });
+      if (i > 0) {
+        spiralConns.push({
+          a: spiralPoints[i-1],
+          b: spiralPoints[i],
+          intensity: 0
+        });
+      }
+    }
+  }
+
+  // === State transitions ===
+  function setState(s) {
+    state = s;
+    stateStart = cycleT;
+
+    if (s === 'radial') {
+      initWeb();
+      nodes.length = 0;
+      signals.length = 0;
+      particles.length = 0;
+      spider.x = CX; spider.y = CY;
+      spider.angle = -Math.PI/2;
+      spider.visible = true; spider.alpha = 1; spider.scale = 1;
+      cycleCountEl.textContent = String(cycleNum).padStart(3, '0');
+      phaseLabel.textContent = 'weave';
+    }
+    else if (s === 'spiral') {
+      phaseLabel.textContent = 'spin';
+    }
+    else if (s === 'network') {
+      for (const r of radials) { r.drawn = 1; r.glow = 0; }
+      for (const p of spiralPoints) p.drawn = 1;
+
+      // spider settles to center
+      spider.x = CX; spider.y = CY;
+      spider.angle = -Math.PI/2;
+
+      nodes.length = 0;
+      nodes.push({ x: CX, y: CY, pulse: 1, kind: 'center' });
+      // radial outer endpoints
+      for (const r of radials) {
+        nodes.push({ x: r.endX, y: r.endY, pulse: 0, kind: 'outer' });
+      }
+      // spiral interior nodes
+      for (let i = 4; i < spiralPoints.length - 4; i += 4) {
+        nodes.push({ x: spiralPoints[i].x, y: spiralPoints[i].y, pulse: 0, kind: 'spiral' });
+      }
+      phaseLabel.textContent = 'fire';
+    }
+    else if (s === 'dissolve') {
+      // particles at each node
+      for (const n of nodes) {
+        for (let k = 0; k < 3; k++) {
+          const ang = Math.random() * Math.PI * 2;
+          const spd = rand(25, 140);
+          particles.push({
+            x: n.x + rand(-2, 2), y: n.y + rand(-2, 2),
+            vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
+            life: rand(0.6, 1.2),
+            color: Math.random() < 0.4 ? '#bdf'
+                  : (Math.random() < 0.5 ? '#fff' : '#7cf'),
+            size: rand(0.8, 2.2)
+          });
+        }
+      }
+      // particles along radials
+      for (const r of radials) {
+        for (let k = 0; k < 6; k++) {
+          const t = Math.random();
+          const x = lerp(CX, r.endX, t);
+          const y = lerp(CY, r.endY, t);
+          const ang = Math.random() * Math.PI * 2;
+          const spd = rand(20, 110);
+          particles.push({
+            x, y,
+            vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
+            life: rand(0.5, 1.1),
+            color: '#7bf', size: rand(0.5, 1.6)
+          });
+        }
+      }
+      // particles along spiral
+      for (const c of spiralConns) {
+        if (Math.random() < 0.35) {
+          const t = Math.random();
+          const x = lerp(c.a.x, c.b.x, t);
+          const y = lerp(c.a.y, c.b.y, t);
+          const ang = Math.random() * Math.PI * 2;
+          const spd = rand(15, 90);
+          particles.push({
+            x, y,
+            vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
+            life: rand(0.5, 1.1),
+            color: '#7bf', size: rand(0.4, 1.3)
+          });
+        }
+      }
+      phaseLabel.textContent = 'fade';
+    }
+  }
+
+  // === Update functions ===
+  function updateRadial(dt) {
+    const elapsed = cycleT - stateStart;
+    const idx = Math.floor(elapsed / RADIAL_TOTAL);
+    if (idx >= NUM_RADIALS) { setState('spiral'); return; }
+    const phase = (elapsed - idx * RADIAL_TOTAL) / RADIAL_TOTAL;
+    const r = radials[idx];
+    const drawFrac = RADIAL_DRAW_T / RADIAL_TOTAL;
+
+    if (phase < drawFrac) {
+      const u = phase / drawFrac;
+      const eu = easeInOut(u);
+      const rad = RADIAL_LENGTH * eu;
+      r.drawn = eu;
+      spider.x = CX + Math.cos(r.angle) * rad;
+      spider.y = CY + Math.sin(r.angle) * rad;
+      spider.angle = r.angle + Math.PI/2;
+      spider.legPhase += dt * (5 + u * 6);
+    } else {
+      const u = (phase - drawFrac) / (1 - drawFrac);
+      const rad = RADIAL_LENGTH * (1 - easeInOut(u));
+      spider.x = CX + Math.cos(r.angle) * rad;
+      spider.y = CY + Math.sin(r.angle) * rad;
+      spider.angle = r.angle - Math.PI/2;
+      spider.legPhase += dt * 8;
+    }
+  }
+
+  function updateSpiral(dt) {
+    const elapsed = cycleT - stateStart;
+    if (elapsed >= SPIRAL_TOTAL) { setState('network'); return; }
+    const u = elapsed / SPIRAL_TOTAL;
+    const idx = Math.min(SPIRAL_STEPS - 1, Math.floor(u * SPIRAL_STEPS));
+    const localU = u * SPIRAL_STEPS - idx;
+
+    for (let i = 0; i <= idx; i++) spiralPoints[i].drawn = 1;
+    if (idx < spiralConns.length) spiralConns[idx].intensity = 1;
+
+    const a = spiralPoints[idx];
+    const b = spiralPoints[Math.min(idx+1, SPIRAL_STEPS)];
+    spider.x = lerp(a.x, b.x, localU);
+    spider.y = lerp(a.y, b.y, localU);
+    const dx = b.x - a.x, dy = b.y - a.y;
+    if (Math.hypot(dx, dy) > 0.1) spider.angle = Math.atan2(dx, -dy);
+    spider.legPhase += dt * 9;
+  }
+
+  function updateNetwork(dt) {
+    const elapsed = cycleT - stateStart;
+    if (elapsed >= NETWORK_T) { setState('dissolve'); return; }
+
+    // ignition wave
+    const ignition = Math.min(1, elapsed / 0.8);
+    for (const n of nodes) {
+      const d = Math.hypot(n.x - CX, n.y - CY);
+      const dNorm = d / RADIAL_LENGTH;
+      const localU = clamp((ignition - dNorm) * 2.5, 0, 1);
+      n.pulse = Math.max(n.pulse, localU);
+    }
+    for (let i = 0; i < spiralConns.length; i++) {
+      const c = spiralConns[i];
+      const d = (c.a.r + c.b.r) / 2;
+      const dNorm = (d - SPIRAL_START_R) / (SPIRAL_END_R - SPIRAL_START_R);
+      const localU = clamp((ignition - dNorm * 0.9) * 2.2, 0, 1);
+      c.intensity = Math.max(c.intensity, localU);
+    }
+
+    // signals
+    if (elapsed > 0.3) {
+      const expected = 4.5 * dt;
+      let n = Math.floor(expected);
+      if (Math.random() < expected - n) n++;
+      for (let i = 0; i < n; i++) {
+        if (Math.random() < 0.55) {
+          const c = spiralConns[Math.floor(Math.random() * spiralConns.length)];
+          const reverse = Math.random() < 0.4;
+          signals.push({
+            ax: reverse ? c.b.x : c.a.x,
+            ay: reverse ? c.b.y : c.a.y,
+            bx: reverse ? c.a.x : c.b.x,
+            by: reverse ? c.a.y : c.b.y,
+            t: 0, speed: rand(0.7, 1.4), size: rand(0.9, 1.5)
+          });
+        } else {
+          const r = radials[Math.floor(Math.random() * radials.length)];
+          const reverse = Math.random() < 0.4;
+          signals.push({
+            ax: reverse ? r.endX : CX,
+            ay: reverse ? r.endY : CY,
+            bx: reverse ? CX : r.endX,
+            by: reverse ? CY : r.endY,
+            t: 0, speed: rand(0.7, 1.4), size: rand(0.9, 1.5)
+          });
+        }
+      }
+    }
+
+    // advance signals
+    for (let i = signals.length - 1; i >= 0; i--) {
+      const s = signals[i];
+      s.t += s.speed * dt;
+      if (s.t >= 1) signals.splice(i, 1);
+    }
+
+    // decay
+    const decay = Math.pow(0.06, dt);
+    for (const n of nodes) n.pulse *= decay;
+    for (const c of spiralConns) c.intensity *= decay;
+
+    // signals light up nearby nodes
+    for (const s of signals) {
+      const tx = lerp(s.ax, s.bx, s.t);
+      const ty = lerp(s.ay, s.by, s.t);
+      for (const n of nodes) {
+        const d = Math.hypot(n.x - tx, n.y - ty);
+        if (d < 22) n.pulse = Math.max(n.pulse, (1 - d/22) * 1.3);
+      }
+    }
+
+    // spider subtle motion
+    spider.legPhase += dt * 1.5;
+    spider.scale = 1 + Math.sin(cycleT * 2.5) * 0.04;
+  }
+
+  function updateDissolve(dt) {
+    const elapsed = cycleT - stateStart;
+    if (elapsed >= DISSOLVE_T) {
+      cycleNum++;
+      setState('radial');
+      return;
+    }
+    const u = elapsed / DISSOLVE_T;
+    spider.alpha = Math.max(0, 1 - u * 1.4);
+    spider.visible = spider.alpha > 0.05;
+    spider.legPhase += dt * 3;
+
+    // fade threads
+    const fadeK = Math.pow(0.02, dt);
+    for (const r of radials) r.drawn = Math.max(0, r.drawn * fadeK);
+    for (const p of spiralPoints) p.drawn = Math.max(0, p.drawn * fadeK);
+
+    // particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vx *= 0.96; p.vy *= 0.96;
+      p.vy += 6 * dt; // slight gravity
+      p.life -= dt / 1.3;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+  }
+
+  // === Render ===
+  function render() {
+    // trail fade
+    ctx.fillStyle = 'rgba(2, 2, 10, 0.20)';
+    ctx.fillRect(0, 0, W, H);
+
+    // ambient blue glow (stronger in network)
+    const ambStr = state === 'network' ? 0.16 : (state === 'dissolve' ? 0.10 : 0.05);
+    const ambient = ctx.createRadialGradient(CX, CY, 0, CX, CY, 360);
+    ambient.addColorStop(0, `rgba(20, 35, 70, ${ambStr})`);
+    ambient.addColorStop(0.5, `rgba(15, 25, 50, ${ambStr * 0.5})`);
+    ambient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = ambient;
+    ctx.fillRect(0, 0, W, H);
+
+    // radials
+    for (const r of radials) {
+      if (r.drawn <= 0.01) continue;
+      const x = CX + Math.cos(r.angle) * RADIAL_LENGTH * r.drawn;
+      const y = CY + Math.sin(r.angle) * RADIAL_LENGTH * r.drawn;
+      const intensity = (state === 'network' ? 0.55 : 0.4) * r.drawn;
+      drawThread(CX, CY, x, y, intensity, '#7bf');
+    }
+
+    // spiral
+    for (let i = 0; i < spiralConns.length; i++) {
+      const c = spiralConns[i];
+      if (c.a.drawn <= 0.01) continue;
+      const baseInt = state === 'network' ? 0.55 : 0.4;
+      const intensity = (baseInt + c.intensity * 0.6) * c.a.drawn;
+      drawThread(c.a.x, c.a.y, c.b.x, c.b.y, intensity, '#7bf');
+    }
+
+    // signals
+    if (state === 'network') {
+      for (const s of signals) {
+        const tx = lerp(s.ax, s.bx, s.t);
+        const ty = lerp(s.ay, s.by, s.t);
+        const r = 3 * s.size;
+        const grad = ctx.createRadialGradient(tx, ty, 0, tx, ty, r * 6);
+        grad.addColorStop(0,   'rgba(235, 250, 255, 1)');
+        grad.addColorStop(0.2, 'rgba(150, 220, 255, 0.75)');
+        grad.addColorStop(0.6, 'rgba(70, 160, 255, 0.25)');
+        grad.addColorStop(1,   'rgba(30, 80, 200, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(tx, ty, r * 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(tx, ty, 1.5 * s.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // nodes
+    for (const n of nodes) {
+      if (state === 'dissolve') continue;
+      const r = 1.5 + n.pulse * 4.5;
+      const alpha = state === 'network' ? 0.9 : 0.5;
+      const grad = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, r * 5);
+      grad.addColorStop(0,   `rgba(210, 240, 255, ${alpha})`);
+      grad.addColorStop(0.4, `rgba(110, 200, 255, ${alpha * 0.55})`);
+      grad.addColorStop(1,   'rgba(40, 100, 200, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, r * 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // particles
+    for (const p of particles) {
+      ctx.fillStyle = p.color;
+      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // spider
+    if (spider.visible) {
+      ctx.globalAlpha = spider.alpha;
+      drawSpider(spider.x, spider.y, spider.angle, spider.legPhase, spider.scale);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function drawThread(x1, y1, x2, y2, intensity, color) {
+    if (intensity < 0.01) return;
+    // outer glow
+    ctx.beginPath();
+    ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5 + intensity * 3;
+    ctx.globalAlpha = 0.08 + intensity * 0.18;
+    ctx.stroke();
+    // core
+    ctx.beginPath();
+    ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 0.5 + intensity * 0.9;
+    ctx.globalAlpha = 0.5 + intensity * 0.45;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  function drawSpider(x, y, angle, legPhase, scale) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.scale(scale, scale);
+
+    // legs
+    ctx.strokeStyle = '#0a0a15';
+    ctx.lineWidth = 1.1;
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 8; i++) {
+      const side = i < 4 ? -1 : 1;
+      const t = i % 4;
+      const legBaseAngle = side * (Math.PI/2.6 + t * 0.18);
+      const wiggle = Math.sin(legPhase + i * 0.7) * 0.35;
+
+      const hx = Math.cos(legBaseAngle) * 6;
+      const hy = Math.sin(legBaseAngle) * 4;
+      const ka = legBaseAngle + wiggle;
+      const kx = Math.cos(ka) * 16, ky = Math.sin(ka) * 12;
+      const fa = legBaseAngle + wiggle * 1.4;
+      const fx = Math.cos(fa) * 24, fy = Math.sin(fa) * 18;
+
+      ctx.beginPath();
+      ctx.moveTo(hx, hy);
+      ctx.lineTo(kx, ky);
+      ctx.lineTo(fx, fy);
+      ctx.stroke();
+    }
+
+    // abdomen
+    const ag = ctx.createRadialGradient(-2, 12, 0, 0, 10, 16);
+    ag.addColorStop(0, '#2a2a3a');
+    ag.addColorStop(1, '#0a0a14');
+    ctx.fillStyle = ag;
+    ctx.beginPath();
+    ctx.ellipse(0, 10, 9, 13, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // cephalothorax
+    const cg = ctx.createRadialGradient(-1, -3, 0, 0, -2, 8);
+    cg.addColorStop(0, '#222230');
+    cg.addColorStop(1, '#0a0a14');
+    ctx.fillStyle = cg;
+    ctx.beginPath();
+    ctx.ellipse(0, -2, 6, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // eyes
+    ctx.fillStyle = '#cef';
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      ctx.arc(-3 + i*2, -6, 0.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  // === Main loop ===
+  function loop() {
+    const now = performance.now() / 1000;
+    const dt = Math.min(0.05, now - lastRealT);
+    lastRealT = now;
+    cycleT += dt;
+
+    if      (state === 'radial')  updateRadial(dt);
+    else if (state === 'spiral')  updateSpiral(dt);
+    else if (state === 'network') updateNetwork(dt);
+    else if (state === 'dissolve') updateDissolve(dt);
+
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  // Boot
+  setState('radial');
+  loop();
+})();
+</script>
+</body>
+</html>

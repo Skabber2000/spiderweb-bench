@@ -1,0 +1,10 @@
+{
+  "model": "glm-5.1",
+  "provider": "Zhipu",
+  "date": "2026-06-13",
+  "tokens_out": 29361,
+  "latency_s": 517.1,
+  "bytes": 13745,
+  "has_canvas": true,
+  "notes": ""
+}

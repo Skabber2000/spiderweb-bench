@@ -1,0 +1,10 @@
+{
+  "model": "grok-4",
+  "provider": "xAI",
+  "date": "2026-06-13",
+  "tokens_out": 1890,
+  "latency_s": 25.7,
+  "bytes": 5784,
+  "has_canvas": true,
+  "notes": ""
+}

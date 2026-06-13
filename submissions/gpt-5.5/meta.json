@@ -1,0 +1,10 @@
+{
+  "model": "gpt-5.5",
+  "provider": "OpenAI",
+  "date": "2026-06-13",
+  "tokens_out": 8667,
+  "latency_s": 156.5,
+  "bytes": 13817,
+  "has_canvas": true,
+  "notes": ""
+}

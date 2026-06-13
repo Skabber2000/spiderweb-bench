@@ -1,0 +1,15 @@
+# intermediate / scratch capture artifacts
+media/raw/
+media/shots/
+media/judge/_*.png
+media/frame_check.png
+media/why_compare.png
+media/claude_new.png
+
+# python
+__pycache__/
+*.pyc
+
+# os
+Thumbs.db
+.DS_Store

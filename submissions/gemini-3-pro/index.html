@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber-Spider Neural Weaver</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background-color: #020105;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        #canvas-container {
+            position: relative;
+            width: 800px;
+            height: 800px;
+            max-width: 95vw;
+            max-height: 95vw;
+            border-radius: 16px;
+            box-shadow: 0 0 40px rgba(0, 240, 255, 0.15);
+            border: 1px solid rgba(0, 240, 255, 0.1);
+            background: radial-gradient(circle at center, #0a0518 0%, #020105 100%);
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            border-radius: 15px;
+        }
+        /* Sci-Fi UI Overlay */
+        .ui-panel {
+            position: absolute;
+            color: #00f0ff;
+            text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+            font-size: 12px;
+            pointer-events: none;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            z-index: 10;
+        }
+        .ui-top-left {
+            top: 25px;
+            left: 25px;
+            border-left: 2px solid #00f0ff;
+            padding-left: 10px;
+        }
+        .ui-top-right {
+            top: 25px;
+            right: 25px;
+            text-align: right;
+            border-right: 2px solid #00f0ff;
+            padding-right: 10px;
+        }
+        .ui-bottom-left {
+            bottom: 25px;
+            left: 25px;
+            font-size: 10px;
+            opacity: 0.7;
+        }
+        .status-pulse {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: #00f0ff;
+            border-radius: 50%;
+            margin-right: 8px;
+            box-shadow: 0 0 8px #00f0ff;
+        }
+        .status-weaving { background-color: #ff5500; box-shadow: 0 0 8px #ff5500; }
+        .status-neural { background-color: #00f0ff; box-shadow: 0 0 8px #00f0ff; }
+        .status-decay { background-color: #9d00ff; box-shadow: 0 0 8px #9d00ff; }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container">
+        <!-- UI Elements -->
+        <div class="ui-panel ui-top-left">
+            <div style="font-weight: bold; font-size: 14px;">NEURAL_WEAVER v2.8</div>
+            <div id="status-text" style="margin-top: 5px; color: #ff5500;"><span id="status-dot" class="status-pulse status-weaving"></span>SYNTHESIZING SILK...</div>
+        </div>
+        <div class="ui-panel ui-top-right">
+            <div>SYS_LOC: [800.800]</div>
+            <div id="node-count" style="margin-top: 5px;">NODES: 61 // ACT_LINES: 0</div>
+        </div>
+        <div class="ui-panel ui-bottom-left">
+            <div>BIOMIMETIC AUTOMATON SIMULATION</div>
+            <div>COGNITIVE SILK INGESTION ACTIVE</div>
+        </div>
+
+        <canvas id="webCanvas" width="800" height="800"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('webCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const statusText = document.getElementById('status-text');
+        const statusDot = document.getElementById('status-dot');
+        const nodeCountUI = document.getElementById('node-count');
+
+        // State Constants
+        const STATE_WEAVING = 0;
+        const STATE_NEURAL = 1;
+        const STATE_DISSOLVE = 2;
+        const STATE_RESET = 3;
+        let currentState = STATE_WEAVING;
+
+        // Geometry Settings
+        const numRadials = 12;
+        const numRings = 5;
+        const maxRadius = 340;
+        const centerX = 400;
+        const centerY = 400;
+
+        let nodeGrid = [];
+        let segments = [];
+        let pulses = [];
+        let particles = [];
+        let ambientDust = [];
+        let actionQueue = [];
+        
+        let rippleRadius = 0;
+        let transitionTimer = 0;
+        let stateTimer = 0;
+        let flashIntensity = 0;
+        let globalTime = 0;
+
+        // Mouse interaction
+        let mouse = { x: -1000, y: -1000, active: false };
+
+        // --- AMBIENT DUST ---
+        function initAmbientDust() {
+            ambientDust = [];
+            for (let i = 0; i < 40; i++) {
+                ambientDust.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    vx: (Math.random() - 0.5) * 0.4,
+                    vy: -Math.random() * 0.3 - 0.1,
+                    size: Math.random() * 1.5 + 0.5,
+                    alpha: Math.random() * 0.5 + 0.1,
+                    baseAlpha: Math.random() * 0.4 + 0.1
+                });
+            }
+        }
+
+        function updateAmbientDust() {
+            ambientDust.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                
+                // Mouse repulsion
+                if (mouse.active) {
+                    const dx = p.x - mouse.x;
+                    const dy = p.y - mouse.y;
+                    const dist = Math.hypot(dx, dy);
+                    if (dist < 100) {
+                        const force = (100 - dist) * 0.01;
+                        p.x += (dx / dist) * force;
+                        p.y += (dy / dist) * force;
+                    }
+                }
+
+                if (p.y < 0) p.y = canvas.height;
+                if (p.x < 0) p.x = canvas.width;
+                if (p.x > canvas.width) p.x = 0;
+                
+                p.alpha = p.baseAlpha + Math.sin(globalTime * 0.02 + p.x * 0.01) * 0.1;
+            });
+        }
+
+        function drawAmbientDust() {
+            ctx.save();
+            ambientDust.forEach(p => {
+                ctx.fillStyle = `rgba(0, 240, 255, ${p.alpha})`;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.restore();
+        }
+
+        // --- WEB GENERATION ---
+        function generateWeb() {
+            nodeGrid = [];
+            segments = [];
+            pulses = [];
+            particles = [];
+
+            // Center Node
+            const centerNode = {
+                id: 'center',
+                ring: 0,
+                radial: 0,
+                x: centerX,
+                y: centerY,
+                originalX: centerX,
+                originalY: centerY,
+                isNeural: false,
+                pulseActive: 0
+            };
+            nodeGrid[0] = [centerNode];
+
+            // Other Rings
+            for (let ring = 1; ring <= numRings; ring++) {
+                nodeGrid[ring] = [];
+                const r = (ring / numRings) * maxRadius;
+                for (let rad = 0; rad < numRadials; rad++) {
+                    const angle = (rad / numRadials) * Math.PI * 2;
+                    // Organic offsets to look hand-woven
+                    const noiseR = (Math.random() - 0.5) * 12;
+                    const noiseA = (Math.random() - 0.5) * 0.06;
+                    const finalR = r + noiseR;
+                    const finalA = angle + noiseA;
+
+                    nodeGrid[ring][rad] = {
+                        id: `${ring}_${rad}`,
+                        ring: ring,
+                        radial: rad,
+                        x: centerX + finalR * Math.cos(finalA),
+                        y: centerY + finalR * Math.sin(finalA),
+                        originalX: centerX + finalR * Math.cos(finalA),
+                        originalY: centerY + finalR * Math.sin(finalA),
+                        isNeural: false,
+                        pulseActive: 0
+                    };
+                }
+            }
+
+            // Create Segments
+            // 1. Radials
+            for (let rad = 0; rad < numRadials; rad++) {
+                segments.push({
+                    n1: centerNode,
+                    n2: nodeGrid[1][rad],
+                    status: 'unwoven',
+                    isNeural: false
+                });
+                for (let ring = 1; ring < numRings; ring++) {
+                    segments.push({
+                        n1: nodeGrid[ring][rad],
+                        n2: nodeGrid[ring+1][rad],
+                        status: 'unwoven',
+                        isNeural: false
+                    });
+                }
+            }
+
+            // 2. Rings (Spiral-like connection)
+            for (let ring = 1; ring <= numRings; ring++) {
+                for (let rad = 0; rad < numRadials; rad++) {
+                    const nextRad = (rad + 1) % numRadials;
+                    segments.push({
+                        n1: nodeGrid[ring][rad],
+                        n2: nodeGrid[ring][nextRad],
+                        status: 'unwoven',
+                        isNeural: false
+                    });
+                }
+            }
+        }
+
+        function findSegment(n1, n2) {
+            return segments.find(s => 
+                (s.n1 === n1 && s.n2 === n2) || (s.n1 === n2 && s.n2 === n1)
+            );
+        }
+
+        // --- SPIDER PATH PLANNING ---
+        function buildWeavingQueue() {
+            actionQueue = [];
+            const center = nodeGrid[0][0];
+
+            // Drop from top of screen to center to start
+            actionQueue.push({ type: 'move', from: { x: centerX, y: -50 }, to: center, weave: true, speed: 4.5, isDrop: true });
+
+            // Weave Radials (Out and back)
+            for (let rad = 0; rad < numRadials; rad++) {
+                let prev = center;
+                for (let ring = 1; ring <= numRings; ring++) {
+                    const curr = nodeGrid[ring][rad];
+                    actionQueue.push({ type: 'move', from: prev, to: curr, weave: true, speed: 4 });
+                    prev = curr;
+                }
+                // Crawl back to center fast
+                for (let ring = numRings - 1; ring >= 0; ring--) {
+                    const curr = (ring === 0) ? center : nodeGrid[ring][rad];
+                    actionQueue.push({ type: 'move', from: prev, to: curr, weave: false, speed: 9 });
+                    prev = curr;
+                }
+            }
+
+            // Weave Concentric Spiral Rings
+            actionQueue.push({ type: 'move', from: center, to: nodeGrid[1][0], weave: false, speed: 5 });
+
+            for (let ring = 1; ring <= numRings; ring++) {
+                let prev = nodeGrid[ring][0];
+                for (let rad = 0; rad < numRadials; rad++) {
+                    const nextRad = (rad + 1) % numRadials;
+                    const curr = nodeGrid[ring][nextRad];
+                    actionQueue.push({ type: 'move', from: prev, to: curr, weave: true, speed: 3.5 });
+                    prev = curr;
+                }
+                // Step outward to next ring
+                if (ring < numRings) {
+                    const nextRingStart = nodeGrid[ring + 1][0];
+                    actionQueue.push({ type: 'move', from: prev, to: nextRingStart, weave: false, speed: 4 });
+                }
+            }
+        }
+
+        // --- SPIDER AGENT ---
+        const spider = {
+            x: centerX,
+            y: -100,
+            angle: 0,
+            walkDistance: 0,
+            color: '#12111c',
+            glowColor: '#ff5500',
+            target: null,
+            action: null,
+            active: true,
+
+            update() {
+                if (!this.active) return;
+
+                if (!this.target) {
+                    if (actionQueue.length > 0) {
+                        this.action = actionQueue.shift();
+                        this.target = this.action.to;
+                        if (this.action.weave && !this.action.isDrop) {
+                            const seg = findSegment(this.action.from, this.action.to);
+                            if (seg) seg.status = 'weaving';
+                        }
+                    } else {
+                        // Weaving complete! Transition to exit.
+                        this.action = { speed: 5, weave: false };
+                        this.target = { x: centerX, y: -120 }; // Climb out
+                        currentState = STATE_NEURAL;
+                        statusDot.className = "status-pulse status-neural";
+                        statusText.innerHTML = "NEURAL COGNITION ONLINE";
+                        rippleRadius = 0;
+                        transitionTimer = 0;
+                        stateTimer = 0;
+                    }
+                }
+
+                // Move toward target
+                const dx = this.target.x - this.x;
+                const dy = this.target.y - this.y;
+                const dist = Math.hypot(dx, dy);
+                const speed = this.action.speed;
+
+                if (dist > speed) {
+                    const angle = Math.atan2(dy, dx);
+                    this.x += Math.cos(angle) * speed;
+                    this.y += Math.sin(angle) * speed;
+                    this.walkDistance += speed;
+
+                    // Angle interpolation
+                    let diff = angle - this.angle;
+                    while (diff < -Math.PI) diff += Math.PI * 2;
+                    while (diff > Math.PI) diff -= Math.PI * 2;
+                    this.angle += diff * 0.15;
+                } else {
+                    // Snap to target
+                    this.x = this.target.x;
+                    this.y = this.target.y;
+                    if (this.action.weave && !this.action.isDrop) {
+                        const seg = findSegment(this.action.from, this.action.to);
+                        if (seg) seg.status = 'woven';
+                    }
+                    this.target = null;
+
+                    // If exited off-screen, disable spider updates
+                    if (currentState === STATE_NEURAL && this.y < -100) {
+                        this.active = false;
+                    }
+                }
+            },
+
+            draw() {
+                if (!this.active) return;
+
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle + Math.PI / 2); // Facing direction
+
+                // Draw Legs
+                const walkCycle = this.walkDistance * 0.18;
+                const legAngles = [
+                    -2.3, -2.8, 2.8, 2.2, // Left
+                    -0.8, -0.3, 0.3, 0.9   // Right
+                ];
+                const legReaches = [26, 31, 31, 25, 26, 31, 31, 25];
+
+                for (let i = 0; i < 8; i++) {
+                    const isLeft = i < 4;
+                    const baseAngle = legAngles[i];
+                    const reach = legReaches[i];
+
+                    // Walking offset
+                    const phase = walkCycle + i * (Math.PI / 2);
+                    const lift = Math.max(0, Math.sin(phase)) * 5;
+                    const forward = Math.cos(phase) * 6;
+
+                    // Base attachment point on cephalothorax
+                    const bx = isLeft ? -4 : 4;
+                    const by = -2 + (i % 4) * 2;
+
+                    // Local space targets
+                    const tx = Math.cos(baseAngle) * reach;
+                    const ty = Math.sin(baseAngle) * reach + forward;
+
+                    // Joint calculation (2D "Knee")
+                    const mx = (bx + tx) / 2;
+                    const my = (by + ty) / 2;
+                    const bendDir = isLeft ? -0.7 : 0.7;
+                    const jx = mx + Math.cos(baseAngle + bendDir) * (reach * 0.35);
+                    const jy = my + Math.sin(baseAngle + bendDir) * (reach * 0.35) - lift;
+
+                    // Leg Shadow/Glow
+                    ctx.strokeStyle = '#03010a';
+                    ctx.lineWidth = 4;
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                    ctx.beginPath();
+                    ctx.moveTo(bx, by);
+                    ctx.lineTo(jx, jy);
+                    ctx.lineTo(tx, ty);
+                    ctx.stroke();
+
+                    // Main Leg
+                    ctx.strokeStyle = this.color;
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+
+                    // Glowing joints
+                    ctx.fillStyle = this.glowColor;
+                    ctx.beginPath();
+                    ctx.arc(jx, jy, 1.2, 0, Math.PI*2);
+                    ctx.fill();
+                }
+
+                // Abdomen
+                ctx.fillStyle = this.color;
+                ctx.strokeStyle = 'rgba(0, 240, 255, 0.15)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.ellipse(0, 9, 9, 13, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Glowing Bio-Pattern on Abdomen
+                ctx.strokeStyle = this.glowColor;
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(-3, 4);
+                ctx.lineTo(3, 4);
+                ctx.lineTo(-2, 12);
+                ctx.lineTo(2, 12);
+                ctx.closePath();
+                ctx.stroke();
+
+                // Cephalothorax (Head/Chest)
+                ctx.fillStyle = '#1e1b2e';
+                ctx.beginPath();
+                ctx.ellipse(0, -3, 6.5, 7.5, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Glowing Eyes
+                ctx.fillStyle = this.glowColor;
+                ctx.beginPath();
+                ctx.arc(-2.5, -7, 1.2, 0, Math.PI * 2);
+                ctx.arc(2.5, -7, 1.2, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            }
+        };
+
+        // --- NEURAL NETWORK SYSTEM ---
+        function getNeighbors(node) {
+            const neighbors = [];
+            const ring = node.ring;
+            const rad = node.radial;
+
+            if (ring === 0) {
+                for (let i = 0; i < numRadials; i++) {
+                    neighbors.push(nodeGrid[1][i]);
+                }
+            } else {
+                if (ring === 1) {
+                    neighbors.push(nodeGrid[0][0]);
+                } else {
+                    neighbors.push(nodeGrid[ring - 1][rad]);
+                }
+                if (ring < numRings) {
+                    neighbors.push(nodeGrid[ring + 1][rad]);
+                }
+                neighbors.push(nodeGrid[ring][(rad - 1 + numRadials) % numRadials]);
+                neighbors.push(nodeGrid[ring][(rad + 1) % numRadials]);
+            }
+            return neighbors;
+        }
+
+        function spawnPulse(startNode) {
+            if (pulses.length > 25) return;
+            const neighbors = getNeighbors(startNode);
+            if (neighbors.length === 0) return;
+            const target = neighbors[Math.floor(Math.random() * neighbors.length)];
+            
+            pulses.push({
+                x: startNode.x,
+                y: startNode.y,
+                prevNode: startNode,
+                currNode: startNode,
+                targetNode: target,
+                progress: 0,
+                speed: 0.04 + Math.random() * 0.03,
+                color: Math.random() > 0.4 ? '#00f0ff' : '#9d00ff',
+                trail: [],
+                life: 6 + Math.floor(Math.random() * 8)
+            });
+        }
+
+        function updatePulses() {
+            for (let i = pulses.length - 1; i >= 0; i--) {
+                const p = pulses[i];
+                p.progress += p.speed;
+
+                // Interpolate position
+                p.x = p.prevNode.x + (p.targetNode.x - p.prevNode.x) * p.progress;
+                p.y = p.prevNode.y + (p.targetNode.y - p.prevNode.y) * p.progress;
+
+                // Save trail
+                p.trail.push({ x: p.x, y: p.y });
+                if (p.trail.length > 10) p.trail.shift();
+
+                // Brighten the nodes dynamically
+                p.prevNode.pulseActive = Math.max(p.prevNode.pulseActive, 1 - p.progress);
+                p.targetNode.pulseActive = Math.max(p.targetNode.pulseActive, p.progress);
+
+                if (p.progress >= 1) {
+                    p.life--;
+                    if (p.life <= 0) {
+                        pulses.splice(i, 1);
+                        continue;
+                    }
+
+                    // Select next node
+                    const neighbors = getNeighbors(p.targetNode).filter(n => n !== p.prevNode);
+                    if (neighbors.length > 0) {
+                        p.prevNode = p.targetNode;
+                        p.targetNode = neighbors[Math.floor(Math.random() * neighbors.length)];
+                        p.progress = 0;
+
+                        // Branching logic
+                        if (Math.random() < 0.18 && pulses.length < 25) {
+                            spawnPulse(p.prevNode);
+                        }
+                    } else {
+                        pulses.splice(i, 1);
+                    }
+                }
+            }
+        }
+
+        function drawPulses() {
+            ctx.save();
+            pulses.forEach(p => {
+                if (p.trail.length < 2) return;
+
+                // Glowing Trail
+                ctx.beginPath();
+                ctx.moveTo(p.trail[0].x, p.trail[0].y);
+                for (let i = 1; i < p.trail.length; i++) {
+                    ctx.lineTo(p.trail[i].x, p.trail[i].y);
+                }
+                ctx.strokeStyle = p.color;
+                ctx.lineWidth = 1.5;
+                ctx.lineCap = 'round';
+                ctx.shadowBlur = 4;
+                ctx.shadowColor = p.color;
+                ctx.stroke();
+
+                // Core Pulse Dot
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = p.color;
+                ctx.fill();
+            });
+            ctx.restore();
+        }
+
+        // --- DISSOLVE SYSTEM (PARTICLES) ---
+        function triggerDissolve() {
+            currentState = STATE_DISSOLVE;
+            statusDot.className = "status-pulse status-decay";
+            statusText.innerHTML = "WEB DECAY DETECTED";
+            pulses = [];
+            particles = [];
+            flashIntensity = 1.0; // Explosion flash
+
+            // Convert Nodes to Particles
+            for (let ring = 0; ring <= numRings; ring++) {
+                nodeGrid[ring].forEach(node => {
+                    const angle = Math.atan2(node.y - centerY, node.x - centerX);
+                    const speed = 1.5 + Math.random() * 2.5;
+                    particles.push({
+                        x: node.x,
+                        y: node.y,
+                        vx: Math.cos(angle) * speed + (Math.random() - 0.5) * 1,
+                        vy: Math.sin(angle) * speed + (Math.random() - 0.5) * 1 - 0.5,
+                        size: Math.random() * 3 + 2,
+                        color: Math.random() > 0.4 ? '#00f0ff' : '#9d00ff',
+                        alpha: 1,
+                        decay: 0.01 + Math.random() * 0.015,
+                        gravity: 0.03
+                    });
+                });
+            }
+
+            // Convert Segments to Particles
+            segments.forEach(seg => {
+                // Generate particles along the line
+                const dist = Math.hypot(seg.n2.x - seg.n1.x, seg.n2.y - seg.n1.y);
+                const steps = Math.floor(dist / 8);
+                for (let i = 0; i <= steps; i++) {
+                    const t = i / steps;
+                    const px = seg.n1.x + (seg.n2.x - seg.n1.x) * t;
+                    const py = seg.n1.y + (seg.n2.y - seg.n1.y) * t;
+                    
+                    const angle = Math.atan2(py - centerY, px - centerX);
+                    const speed = 0.5 + Math.random() * 1.5;
+
+                    particles.push({
+                        x: px,
+                        y: py,
+                        vx: Math.cos(angle) * speed + (Math.random() - 0.5) * 0.8,
+                        vy: Math.sin(angle) * speed + (Math.random() - 0.5) * 0.8 + 0.2, // Drifts down
+                        size: Math.random() * 1.5 + 0.8,
+                        color: Math.random() > 0.5 ? '#00f0ff' : '#9d00ff',
+                        alpha: 1,
+                        decay: 0.015 + Math.random() * 0.02,
+                        gravity: 0.04
+                    });
+                }
+            });
+        }
+
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += p.gravity; // Gravity pull
+                p.alpha -= p.decay;
+
+                // Mouse wind
+                if (mouse.active) {
+                    const dx = p.x - mouse.x;
+                    const dy = p.y - mouse.y;
+                    const dist = Math.hypot(dx, dy);
+                    if (dist < 120) {
+                        const force = (120 - dist) * 0.012;
+                        p.vx += (dx / dist) * force;
+                    }
+                }
+
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+
+            if (flashIntensity > 0) flashIntensity -= 0.05;
+        }
+
+        function drawParticles() {
+            ctx.save();
+            particles.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.alpha;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.restore();
+        }
+
+        // --- MAIN CANVAS INTERACTION ---
+        function updateNodePositions() {
+            // Rubber band / Magnetic elasticity with Mouse
+            for (let ring = 0; ring <= numRings; ring++) {
+                nodeGrid[ring].forEach(node => {
+                    let targetX = node.originalX;
+                    let targetY = node.originalY;
+
+                    if (mouse.active) {
+                        const dx = mouse.x - node.originalX;
+                        const dy = mouse.y - node.originalY;
+                        const dist = Math.hypot(dx, dy);
+                        if (dist < 160) {
+                            const pull = (160 - dist) * 0.22; // Elastic reach
+                            const angle = Math.atan2(dy, dx);
+                            targetX = node.originalX + Math.cos(angle) * pull;
+                            targetY = node.originalY + Math.sin(angle) * pull;
+                        }
+                    }
+
+                    // Ease to target
+                    node.x += (targetX - node.x) * 0.08;
+                    node.y += (targetY - node.y) * 0.08;
+
+                    // Decay node pulse brightness
+                    if (node.pulseActive > 0) node.pulseActive -= 0.03;
+                });
+            }
+        }
+
+        // --- DRAWING THE WEB ---
+        function drawWeb() {
+            ctx.save();
+
+            // Background Decorative Radar Lines
+            ctx.strokeStyle = 'rgba(0, 240, 255, 0.02)';
+            ctx.lineWidth = 1;
+            for (let r = 80; r <= maxRadius; r += 80) {
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, r, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            // Draw Web Lines
+            segments.forEach(seg => {
+                if (seg.status === 'unwoven') return;
+
+                let x1 = seg.n1.x;
+                let y1 = seg.n1.y;
+                let x2 = seg.n2.x;
+                let y2 = seg.n2.y;
+
+                if (seg.status === 'weaving') {
+                    // Draw only up to spider's position
+                    if (spider.action && (spider.action.from === seg.n1 || spider.action.from === seg.n2)) {
+                        x2 = spider.x;
+                        y2 = spider.y;
+                    }
+                }
+
+                if (currentState === STATE_WEAVING) {
+                    // Regular Silk State
+                    ctx.strokeStyle = 'rgba(235, 245, 255, 0.25)';
+                    ctx.lineWidth = 1.2;
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1);
+                    ctx.lineTo(x2, y2);
+                    ctx.stroke();
+
+                } else if (currentState === STATE_NEURAL) {
+                    // Glowing Neural State
+                    if (seg.isNeural) {
+                        // Multi-pass neon glow
+                        ctx.shadowBlur = 0;
+                        ctx.lineCap = 'round';
+                        
+                        // Outer Glow
+                        ctx.strokeStyle = 'rgba(0, 240, 255, 0.12)';
+                        ctx.lineWidth = 5;
+                        ctx.beginPath();
+                        ctx.moveTo(x1, y1);
+                        ctx.lineTo(x2, y2);
+                        ctx.stroke();
+
+                        // Inner Core
+                        ctx.strokeStyle = '#00f0ff';
+                        ctx.lineWidth = 1.2;
+                        ctx.stroke();
+
+                        // Core Highlight
+                        ctx.strokeStyle = '#ffffff';
+                        ctx.lineWidth = 0.4;
+                        ctx.stroke();
+                    } else {
+                        // Regular silk transitioning
+                        ctx.strokeStyle = 'rgba(235, 245, 255, 0.2)';
+                        ctx.lineWidth = 1.2;
+                        ctx.beginPath();
+                        ctx.moveTo(x1, y1);
+                        ctx.lineTo(x2, y2);
+                        ctx.stroke();
+                    }
+                }
+            });
+
+            // Draw Nodes in Neural State
+            if (currentState === STATE_NEURAL) {
+                for (let ring = 0; ring <= numRings; ring++) {
+                    nodeGrid[ring].forEach(node => {
+                        if (!node.isNeural) return;
+
+                        const pulseVal = node.pulseActive;
+                        const baseRadius = node.ring === 0 ? 4 : 2.5;
+                        const radius = baseRadius + pulseVal * 3;
+
+                        // Outer Pulse Halo
+                        ctx.fillStyle = pulseVal > 0.1 ? `rgba(157, 0, 255, ${pulseVal * 0.4})` : 'rgba(0, 240, 255, 0.1)';
+                        ctx.beginPath();
+                        ctx.arc(node.x, node.y, radius * 2.5, 0, Math.PI * 2);
+                        ctx.fill();
+
+                        // Main Node Dot
+                        ctx.fillStyle = pulseVal > 0.3 ? '#ffffff' : '#00f0ff';
+                        ctx.beginPath();
+                        ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+                        ctx.shadowBlur = 6;
+                        ctx.shadowColor = '#00f0ff';
+                        ctx.fill();
+                    });
+                }
+            }
+
+            ctx.restore();
+        }
+
+        // --- SYSTEM LOOPS & STATE MACHINES ---
+        function update() {
+            globalTime++;
+            updateAmbientDust();
+
+            if (currentState === STATE_WEAVING) {
+                updateNodePositions();
+                spider.update();
+
+                // Custom drop dragline draw
+                if (spider.action && spider.action.isDrop) {
+                    ctx.save();
+                    ctx.strokeStyle = 'rgba(235, 245, 255, 0.3)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(centerX, 0);
+                    ctx.lineTo(spider.x, spider.y);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+
+                // Update UI Node Counter
+                const wovenLines = segments.filter(s => s.status === 'woven').length;
+                nodeCountUI.innerHTML = `NODES: 61 // ACT_LINES: ${wovenLines}`;
+
+            } else if (currentState === STATE_NEURAL) {
+                updateNodePositions();
+                spider.update(); // Let spider climb out
+
+                // Neural Propagation Transition Ripple
+                rippleRadius += 4.5;
+                for (let ring = 0; ring <= numRings; ring++) {
+                    nodeGrid[ring].forEach(node => {
+                        const dist = Math.hypot(node.x - centerX, node.y - centerY);
+                        if (dist < rippleRadius && !node.isNeural) {
+                            node.isNeural = true;
+                            // Small spark particle
+                            for (let i = 0; i < 3; i++) {
+                                particles.push({
+                                    x: node.x,
+                                    y: node.y,
+                                    vx: (Math.random() - 0.5) * 1.5,
+                                    vy: (Math.random() - 0.5) * 1.5,
+                                    size: Math.random() * 1.5 + 0.5,
+                                    color: '#00f0ff',
+                                    alpha: 1,
+                                    decay: 0.03,
+                                    gravity: 0.01
+                                });
+                            }
+                        }
+                    });
+                }
+
+                // Activate segments whose endpoints are both neural
+                segments.forEach(seg => {
+                    if (seg.n1.isNeural && seg.n2.isNeural) {
+                        seg.isNeural = true;
+                    }
+                });
+
+                // Spark active signals
+                if (rippleRadius > maxRadius * 0.4) {
+                    if (Math.random() < 0.12) {
+                        // Fire from center outwards
+                        spawnPulse(nodeGrid[0][0]);
+                    }
+                    if (Math.random() < 0.08) {
+                        // Fire from random perimeter node inwards
+                        const randRad = Math.floor(Math.random() * numRadials);
+                        spawnPulse(nodeGrid[numRings][randRad]);
+                    }
+                }
+
+                updatePulses();
+                updateParticles(); // Update spark particles
+
+                // State Lifecycle Timer
+                stateTimer++;
+                if (stateTimer > 420) { // ~7 seconds of neural activity
+                    triggerDissolve();
+                }
+
+                nodeCountUI.innerHTML = `NODES: 61 // ACT_LINES: ${segments.length} // SIGNALS: ${pulses.length}`;
+
+            } else if (currentState === STATE_DISSOLVE) {
+                updateParticles();
+                nodeCountUI.innerHTML = `NODES: 0 // DECAY_PARTICLES: ${particles.length}`;
+
+                if (particles.length === 0) {
+                    currentState = STATE_RESET;
+                }
+            } else if (currentState === STATE_RESET) {
+                // Re-initialize Web
+                generateWeb();
+                buildWeavingQueue();
+                
+                // Reset Spider
+                spider.x = centerX;
+                spider.y = -50;
+                spider.angle = Math.PI / 2;
+                spider.active = true;
+                spider.target = null;
+                spider.action = null;
+
+                currentState = STATE_WEAVING;
+                statusDot.className = "status-pulse status-weaving";
+                statusText.innerHTML = "SYNTHESIZING SILK...";
+            }
+        }
+
+        function draw() {
+            // Draw Deep Space background
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Ambient Dust
+            drawAmbientDust();
+
+            // Core Web
+            if (currentState !== STATE_DISSOLVE) {
+                drawWeb();
+            }
+
+            // Neural Pulses
+            if (currentState === STATE_NEURAL) {
+                drawPulses();
+            }
+
+            // Spider Agent
+            if (currentState === STATE_WEAVING || currentState === STATE_NEURAL) {
+                spider.draw();
+            }
+
+            // Dissolving Particles
+            if (currentState === STATE_DISSOLVE || currentState === STATE_NEURAL) {
+                drawParticles();
+            }
+
+            // Flash effect on shatter
+            if (flashIntensity > 0) {
+                ctx.fillStyle = `rgba(255, 255, 255, ${flashIntensity * 0.35})`;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        // --- MOUSE LISTENERS ---
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouse.x = (e.clientX - rect.left) * (canvas.width / rect.width);
+            mouse.y = (e.clientY - rect.top) * (canvas.height / rect.height);
+            mouse.active = true;
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            mouse.active = false;
+        });
+
+        // --- INITIALIZATION ---
+        initAmbientDust();
+        generateWeb();
+        buildWeavingQueue();
+        loop();
+
+    </script>
+</body>
+</html>

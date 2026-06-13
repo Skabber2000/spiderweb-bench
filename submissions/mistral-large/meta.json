@@ -1,0 +1,10 @@
+{
+  "model": "mistral-large-latest",
+  "provider": "Mistral",
+  "date": "2026-06-13",
+  "tokens_out": 2732,
+  "latency_s": 31.9,
+  "bytes": 11608,
+  "has_canvas": true,
+  "notes": ""
+}

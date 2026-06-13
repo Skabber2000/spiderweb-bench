@@ -1,0 +1,10 @@
+{
+  "model": "gemini-3.5-flash",
+  "provider": "Google",
+  "date": "2026-06-13",
+  "tokens_out": 9902,
+  "latency_s": 158.0,
+  "bytes": 37384,
+  "has_canvas": true,
+  "notes": ""
+}

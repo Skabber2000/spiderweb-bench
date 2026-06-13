@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpiderWeb Bench — LLM Comparison Gallery</title>
+<style>
+  :root{
+    --bg:#0a0c12; --panel:#11141d; --panel2:#161a26; --line:#222838;
+    --txt:#dfe6f2; --dim:#8b97ad; --accent:#5fd0ff; --accent2:#9a7bff;
+    --good:#4ec96b; --warn:#f2b441; --bad:#ff5d6c;
+    --card:280px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;}
+  header{
+    position:sticky;top:0;z-index:20;backdrop-filter:blur(10px);
+    background:linear-gradient(180deg,rgba(10,12,18,.96),rgba(10,12,18,.78));
+    border-bottom:1px solid var(--line);padding:14px 22px;
+    display:flex;align-items:center;gap:18px;flex-wrap:wrap;}
+  h1{font-size:15px;margin:0;letter-spacing:.04em;font-weight:650;}
+  h1 b{color:var(--accent)}
+  .sub{color:var(--dim);font-size:12px}
+  .spacer{flex:1}
+  .btn{background:var(--panel2);color:var(--txt);border:1px solid var(--line);
+    border-radius:8px;padding:7px 12px;font-size:12px;cursor:pointer;
+    font-family:inherit;transition:.15s;}
+  .btn:hover{border-color:var(--accent);color:#fff}
+  .btn.ghost{background:transparent}
+  label.size{font-size:12px;color:var(--dim);display:flex;align-items:center;gap:8px}
+  input[type=range]{accent-color:var(--accent)}
+
+  main{padding:22px;display:grid;gap:22px;
+    grid-template-columns:repeat(auto-fill,minmax(var(--card),1fr));}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    overflow:hidden;display:flex;flex-direction:column;}
+  .card.empty{opacity:.55;border-style:dashed}
+  .frameWrap{position:relative;background:#000;display:grid;place-items:center;
+    aspect-ratio:1/1;overflow:hidden;border-bottom:1px solid var(--line);}
+  iframe{border:0;width:800px;height:800px;transform-origin:top left;background:#000;}
+  .missing{color:var(--dim);font-size:13px;text-align:center;padding:24px;line-height:1.5}
+  .frameTop{position:absolute;top:8px;left:8px;right:8px;display:flex;
+    justify-content:space-between;align-items:center;gap:8px;z-index:3;}
+  .pill{background:rgba(0,0,0,.6);border:1px solid var(--line);border-radius:999px;
+    padding:3px 9px;font-size:11px;color:var(--txt);}
+  .pill .dot{display:inline-block;width:7px;height:7px;border-radius:50%;
+    margin-right:5px;vertical-align:middle;}
+  .reload{background:rgba(0,0,0,.6);border:1px solid var(--line);border-radius:8px;
+    color:var(--txt);cursor:pointer;font-size:12px;padding:3px 8px}
+  .reload:hover{border-color:var(--accent)}
+
+  .meta{padding:10px 14px;border-bottom:1px solid var(--line);
+    display:flex;justify-content:space-between;align-items:baseline;}
+  .meta .name{font-weight:600;font-size:14px}
+  .meta .prov{color:var(--dim);font-size:11px}
+  .total{font-variant-numeric:tabular-nums;font-weight:700;font-size:18px;color:var(--accent)}
+  .total small{font-size:11px;color:var(--dim);font-weight:400}
+
+  .crit{padding:10px 14px;display:grid;gap:9px}
+  .row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px}
+  .row .lbl{font-size:12px;color:var(--dim)}
+  .row .lbl b{color:var(--txt);font-weight:600}
+  .row .wt{font-size:10px;color:var(--dim)}
+  .seg{display:flex;gap:3px}
+  .seg button{width:18px;height:22px;border-radius:4px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--dim);font-size:10px;cursor:pointer;padding:0;
+    font-family:inherit;transition:.1s}
+  .seg button:hover{border-color:var(--accent)}
+  .seg button.on{background:linear-gradient(180deg,var(--accent),#2f8fd6);
+    color:#04121c;border-color:var(--accent);font-weight:700}
+  .seg button.on.lo{background:linear-gradient(180deg,var(--bad),#b23744);color:#fff}
+  .seg button.on.mid{background:linear-gradient(180deg,var(--warn),#c8902a);color:#1c1303}
+
+  /* leaderboard */
+  #board{position:fixed;right:0;top:0;height:100vh;width:330px;z-index:30;
+    background:var(--panel);border-left:1px solid var(--line);
+    transform:translateX(100%);transition:transform .25s ease;display:flex;flex-direction:column}
+  #board.open{transform:translateX(0)}
+  #board h2{font-size:13px;margin:0;padding:16px 18px;border-bottom:1px solid var(--line);
+    letter-spacing:.04em;display:flex;justify-content:space-between;align-items:center}
+  #board .close{cursor:pointer;color:var(--dim)}
+  .lbItems{overflow:auto;padding:10px 14px;flex:1}
+  .lbRow{display:grid;grid-template-columns:22px 1fr auto;gap:10px;align-items:center;
+    padding:9px 8px;border-radius:9px;margin-bottom:6px;background:var(--panel2);
+    border:1px solid transparent}
+  .lbRow .rk{color:var(--dim);font-weight:700;text-align:center}
+  .lbRow.gold{border-color:#d4a843}.lbRow.gold .rk{color:#d4a843}
+  .lbRow.silver{border-color:#9fb0c4}.lbRow.silver .rk{color:#cdd8e6}
+  .lbRow.bronze{border-color:#b07b4f}.lbRow.bronze .rk{color:#c98f5f}
+  .lbRow .nm{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .lbRow .sc{font-variant-numeric:tabular-nums;font-weight:700;color:var(--accent)}
+  .bar{height:5px;border-radius:3px;background:#0b0d14;margin-top:5px;grid-column:2/4;overflow:hidden}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent))}
+  .lbFoot{padding:12px 14px;border-top:1px solid var(--line);font-size:11px;color:var(--dim)}
+  .hint{padding:0 22px 26px;color:var(--dim);font-size:12px;max-width:760px;line-height:1.6}
+  code{background:var(--panel2);padding:1px 6px;border-radius:5px;font-size:11px}
+</style>
+</head>
+<body>
+<header>
+  <h1><b>SpiderWeb</b> Bench</h1>
+  <span class="sub">spider&nbsp;→&nbsp;web&nbsp;→&nbsp;neural&nbsp;→&nbsp;dissolve · one-shot LLM comparison</span>
+  <span class="spacer"></span>
+  <label class="size">zoom <input id="zoom" type="range" min="0.2" max="0.6" step="0.02" value="0.32"></label>
+  <button class="btn ghost" id="reloadAll">↻ reload all</button>
+  <button class="btn ghost" id="exportBtn">⤓ export scores</button>
+  <button class="btn ghost" id="importBtn">⤒ import</button>
+  <input id="importFile" type="file" accept="application/json" style="display:none">
+  <button class="btn" id="boardBtn">🏆 leaderboard</button>
+</header>
+
+<main id="grid"></main>
+
+<p class="hint">
+  Each card embeds the model's raw <code>submissions/&lt;id&gt;/index.html</code>. Score every
+  criterion 0–10 (red = weak, gold = strong); weights from <code>RUBRIC.md</code> are applied
+  automatically. Scores persist in this browser (localStorage) and can be exported to JSON.
+  Drop a model's output into its folder as <code>index.html</code> and hit <b>↻ reload all</b>.
+  Judge the artifact, not the name — watch at least two full loops.
+</p>
+
+<aside id="board">
+  <h2>Leaderboard <span class="close" id="boardClose">✕</span></h2>
+  <div class="lbItems" id="lbItems"></div>
+  <div class="lbFoot" id="lbFoot"></div>
+</aside>
+
+<script>
+/* ------------------------------------------------------------------ *
+ *  CONFIG — edit MODELS and CRITERIA to taste.                        *
+ *  `id` must match the folder name under submissions/.                *
+ * ------------------------------------------------------------------ */
+const MODELS = [
+  { id:"claude-opus-4.8", name:"Claude Opus 4.8", provider:"Anthropic" },
+  { id:"gpt-5.5",         name:"GPT-5.5",         provider:"OpenAI" },
+  { id:"grok-4",          name:"Grok 4",          provider:"xAI" },
+  { id:"gemini-3-pro",    name:"Gemini 3.5 Flash", provider:"Google" },
+  { id:"glm-5.1",         name:"GLM-5.1",         provider:"Zhipu" },
+  { id:"minimax-m3",      name:"MiniMax M3",      provider:"MiniMax" },
+  { id:"mistral-large",   name:"Mistral Large",   provider:"Mistral" },
+];
+
+const CRITERIA = [
+  { key:"spec",   label:"Spec compliance",  wt:20 },
+  { key:"weave",  label:"Weaving",          wt:15 },
+  { key:"trans",  label:"Web→neural",       wt:15 },
+  { key:"fire",   label:"Neural firing",    wt:15 },
+  { key:"polish", label:"Visual polish",    wt:15 },
+  { key:"code",   label:"Code quality",     wt:10 },
+  { key:"perf",   label:"Performance",      wt:10 },
+];
+const MAXW = CRITERIA.reduce((s,c)=>s+c.wt,0); // 100
+
+/* ------------------------------------------------------------------ */
+const LS_KEY = "spiderbench.scores.v1";
+let scores = load();
+function load(){ try{ return JSON.parse(localStorage.getItem(LS_KEY))||{}; }catch(e){ return {}; } }
+function save(){ localStorage.setItem(LS_KEY, JSON.stringify(scores)); }
+function modelScore(id){
+  const s = scores[id]||{};
+  let pts=0, any=false;
+  for(const c of CRITERIA){ if(typeof s[c.key]==="number"){ pts += s[c.key]/10*c.wt; any=true; } }
+  return { pts: any?pts:null };
+}
+
+const grid = document.getElementById("grid");
+const zoomEl = document.getElementById("zoom");
+
+function probe(id){
+  // Best-effort existence check; iframe still displays even if cross-origin blocks read.
+  return fetch(`../submissions/${id}/index.html`,{cache:"no-store"})
+    .then(r=> r.ok ? r.text() : Promise.reject())
+    .then(t=> ({ok:true, has:t.toLowerCase().includes("<canvas"), bytes:t.length}))
+    .catch(()=> ({ok:false}));
+}
+
+function build(){
+  grid.innerHTML="";
+  for(const m of MODELS){
+    const card = document.createElement("div");
+    card.className="card"; card.dataset.id=m.id;
+    card.innerHTML = `
+      <div class="frameWrap" data-frame>
+        <div class="frameTop">
+          <span class="pill" data-status><span class="dot" style="background:#555"></span>checking…</span>
+          <button class="reload" title="reload">↻</button>
+        </div>
+        <div class="missing" data-missing style="display:none"></div>
+      </div>
+      <div class="meta">
+        <div><div class="name">${m.name}</div><div class="prov">${m.provider}</div></div>
+        <div class="total" data-total>—<small>/100</small></div>
+      </div>
+      <div class="crit" data-crit></div>`;
+    grid.appendChild(card);
+
+    // criteria rows
+    const crit = card.querySelector("[data-crit]");
+    for(const c of CRITERIA){
+      const row=document.createElement("div"); row.className="row";
+      const seg=document.createElement("div"); seg.className="seg";
+      for(let v=0;v<=10;v++){
+        const b=document.createElement("button"); b.textContent=v; b.dataset.v=v;
+        b.onclick=()=>{ setScore(m.id,c.key,v); };
+        seg.appendChild(b);
+      }
+      row.innerHTML = `<div class="lbl"><b>${c.label}</b> <span class="wt">×${c.wt}</span></div>`;
+      row.appendChild(seg);
+      crit.appendChild(row);
+    }
+    paintCard(m.id);
+
+    // load iframe / status
+    const fw = card.querySelector("[data-frame]");
+    const status = card.querySelector("[data-status]");
+    const miss = card.querySelector("[data-missing]");
+    const reloadBtn = card.querySelector(".reload");
+    const mount = ()=>{
+      probe(m.id).then(res=>{
+        const old=fw.querySelector("iframe"); if(old) old.remove();
+        if(res.ok){
+          const f=document.createElement("iframe");
+          f.src=`../submissions/${m.id}/index.html?cb=${Date.now()}`;
+          fw.insertBefore(f, fw.firstChild);
+          miss.style.display="none";
+          card.classList.remove("empty");
+          const ok = res.has;
+          status.innerHTML=`<span class="dot" style="background:${ok?'var(--good)':'var(--warn)'}"></span>${ok?'loaded':'no &lt;canvas&gt;?'} · ${(res.bytes/1024|0)} KB`;
+          applyZoom(f);
+        } else {
+          miss.style.display="block";
+          miss.innerHTML=`no submission yet<br><code>submissions/${m.id}/index.html</code>`;
+          card.classList.add("empty");
+          status.innerHTML=`<span class="dot" style="background:#555"></span>missing`;
+        }
+      });
+    };
+    reloadBtn.onclick=mount;
+    mount();
+  }
+  renderBoard();
+}
+
+function applyZoom(f){
+  const z=parseFloat(zoomEl.value);
+  f.style.transform=`scale(${z})`;
+  const w=f.parentElement.clientWidth;
+  // center: canvas is 800; scaled width = 800*z. left offset to center.
+  const off=(w-800*z)/2;
+  f.style.marginLeft=Math.max(0,off)+"px";
+  f.style.marginTop=Math.max(0,off)+"px";
+}
+zoomEl.oninput=()=>document.querySelectorAll("iframe").forEach(applyZoom);
+
+function setScore(id,key,v){
+  scores[id]=scores[id]||{};
+  // toggle off if same value clicked
+  scores[id][key] = (scores[id][key]===v)? undefined : v;
+  if(scores[id][key]===undefined) delete scores[id][key];
+  save(); paintCard(id); renderBoard();
+}
+function paintCard(id){
+  const card=[...grid.children].find(c=>c.dataset.id===id); if(!card) return;
+  const s=scores[id]||{};
+  card.querySelectorAll(".crit .row").forEach((row,i)=>{
+    const key=CRITERIA[i].key; const val=s[key];
+    row.querySelectorAll(".seg button").forEach(b=>{
+      const bv=+b.dataset.v; b.classList.remove("on","lo","mid");
+      if(val!==undefined && bv===val){
+        b.classList.add("on");
+        if(val<=3) b.classList.add("lo"); else if(val<=6) b.classList.add("mid");
+      }
+    });
+  });
+  const {pts}=modelScore(id);
+  card.querySelector("[data-total]").innerHTML = (pts===null?"—":pts.toFixed(1))+`<small>/100</small>`;
+}
+
+/* leaderboard */
+const board=document.getElementById("board");
+document.getElementById("boardBtn").onclick=()=>{board.classList.add("open");renderBoard();};
+document.getElementById("boardClose").onclick=()=>board.classList.remove("open");
+function renderBoard(){
+  const rows=MODELS.map(m=>({m,...modelScore(m.id)}))
+    .sort((a,b)=>(b.pts??-1)-(a.pts??-1));
+  const wrap=document.getElementById("lbItems"); wrap.innerHTML="";
+  const medal=["gold","silver","bronze"];
+  let scored=0;
+  rows.forEach((r,i)=>{
+    if(r.pts!==null) scored++;
+    const div=document.createElement("div");
+    div.className="lbRow"+(r.pts!==null&&i<3?" "+medal[i]:"");
+    div.innerHTML=`<div class="rk">${r.pts===null?"–":i+1}</div>
+      <div class="nm" title="${r.m.provider}">${r.m.name}</div>
+      <div class="sc">${r.pts===null?"—":r.pts.toFixed(1)}</div>
+      <div class="bar"><i style="width:${r.pts===null?0:r.pts}%"></i></div>`;
+    wrap.appendChild(div);
+  });
+  document.getElementById("lbFoot").textContent=`${scored}/${MODELS.length} models scored · max 100 pts`;
+}
+
+/* export / import */
+document.getElementById("reloadAll").onclick=build;
+document.getElementById("exportBtn").onclick=()=>{
+  const payload={ benchmark:"SpiderWeb_Bench", criteria:CRITERIA,
+    exported:new Date().toISOString(), scores,
+    totals:Object.fromEntries(MODELS.map(m=>[m.id,modelScore(m.id).pts])) };
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="spiderbench_scores.json"; a.click();
+};
+document.getElementById("importBtn").onclick=()=>document.getElementById("importFile").click();
+document.getElementById("importFile").onchange=e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{ try{ const d=JSON.parse(r.result); if(d.scores){scores=d.scores;save();build();} }
+    catch(err){ alert("Bad JSON"); } };
+  r.readAsText(f);
+};
+
+build();
+</script>
+</body>
+</html>

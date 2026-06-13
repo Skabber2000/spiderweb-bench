@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spider Weaves Neural Web</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #050510;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            font-family: sans-serif;
+        }
+        canvas {
+            border-radius: 12px;
+            box-shadow: 0 0 60px rgba(0, 180, 255, 0.15), 0 0 120px rgba(0, 80, 200, 0.08);
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas" width="800" height="800"></canvas>
+    <script>
+        (function() {
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            const W = 800,
+                H = 800;
+            const CX = 400,
+                CY = 400;
+            const MAX_RADIUS = 310;
+            const NUM_RADIALS = 18;
+            const NUM_RINGS = 11;
+
+            // ──────────────────────────────────────
+            // Web geometry
+            // ──────────────────────────────────────
+            const radials = [];
+            for (let i = 0; i < NUM_RADIALS; i++) {
+                const angle = (i / NUM_RADIALS) * Math.PI * 2 - Math.PI / 2;
+                radials.push({
+                    angle,
+                    ex: CX + Math.cos(angle) * MAX_RADIUS,
+                    ey: CY + Math.sin(angle) * MAX_RADIUS
+                });
+            }
+
+            const ringDistances = [];
+            for (let k = 0; k < NUM_RINGS; k++) {
+                ringDistances.push(28 + (k / (NUM_RINGS - 1)) * (MAX_RADIUS - 28));
+            }
+
+            // Nodes: center=0, then for radial r (0..NUM_RADIALS-1) and ring k (0..NUM_RINGS-1): index = 1 + r*NUM_RINGS + k
+            const totalNodes = 1 + NUM_RADIALS * NUM_RINGS;
+            const nodes = [];
+            nodes.push({ x: CX, y: CY }); // center node
+            for (let r = 0; r < NUM_RADIALS; r++) {
+                for (let k = 0; k < NUM_RINGS; k++) {
+                    const d = ringDistances[k];
+                    nodes.push({
+                        x: CX + Math.cos(radials[r].angle) * d,
+                        y: CY + Math.sin(radials[r].angle) * d
+                    });
+                }
+            }
+
+            function nodeIndex(radial, ring) {
+                return 1 + radial * NUM_RINGS + ring;
+            }
+
+            // Edges: radial edges + spiral edges
+            const radialEdges = []; // {a, b} node indices
+            for (let r = 0; r < NUM_RADIALS; r++) {
+                // center -> ring0
+                radialEdges.push({ a: 0, b: nodeIndex(r, 0) });
+                // ring k -> ring k+1
+                for (let k = 0; k < NUM_RINGS - 1; k++) {
+                    radialEdges.push({ a: nodeIndex(r, k), b: nodeIndex(r, k + 1) });
+                }
+            }
+
+            const spiralEdges = [];
+            for (let k = 0; k < NUM_RINGS; k++) {
+                for (let r = 0; r < NUM_RADIALS; r++) {
+                    const nextR = (r + 1) % NUM_RADIALS;
+                    spiralEdges.push({ a: nodeIndex(r, k), b: nodeIndex(nextR, k) });
+                }
+            }
+
+            const allStructuralEdges = [...radialEdges, ...spiralEdges];
+            const totalStructuralEdges = allStructuralEdges.length;
+
+            // Build adjacency for structural edges
+            const adjacency = new Map();
+            for (let i = 0; i < totalNodes; i++) adjacency.set(i, []);
+            function addAdjEntry(nodeA, nodeB, edgeIdx) {
+                adjacency.get(nodeA).push({ node: nodeB, edgeIndex: edgeIdx });
+                adjacency.get(nodeB).push({ node: nodeA, edgeIndex: edgeIdx });
+            }
+            for (let ei = 0; ei < totalStructuralEdges; ei++) {
+                const e = allStructuralEdges[ei];
+                addAdjEntry(e.a, e.b, ei);
+            }
+
+            // Build order for spider path
+            const buildOrderEdges = [];
+            // First all radial edges
+            for (let ei = 0; ei < radialEdges.length; ei++) buildOrderEdges.push(ei);
+            // Then all spiral edges
+            for (let ei = 0; ei < spiralEdges.length; ei++) buildOrderEdges.push(radialEdges.length + ei);
+
+            // ──────────────────────────────────────
+            // State
+            // ──────────────────────────────────────
+            const PHASE_BUILDING = 'building';
+            const PHASE_NEURAL = 'neural';
+            const PHASE_DISSOLVE = 'dissolving';
+            const PHASE_REST = 'rest';
+
+            const BUILD_DURATION = 9.5;
+            const NEURAL_DURATION = 6.0;
+            const DISSOLVE_DURATION = 3.5;
+            const REST_DURATION = 1.2;
+            const TOTAL_CYCLE = BUILD_DURATION + NEURAL_DURATION + DISSOLVE_DURATION + REST_DURATION;
+
+            let cycleStartTime = performance.now() / 1000;
+            let phase = PHASE_BUILDING;
+            let phaseStartTime = cycleStartTime;
+            let buildProgress = 0;
+            let spiderPos = { x: CX, y: CY };
+            let spiderVisible = true;
+            let spiderAlpha = 1;
+            let spiderTrail = []; // recent positions for trailing effect
+
+            // Neural signals
+            let neuralSignals = [];
+            let neuralExtraEdges = []; // extra cross-connections for neural phase
+            let neuralGlowIntensity = 0;
+
+            // Dissolve particles
+            let dissolveParticles = [];
+            let dissolveOpacity = 1;
+            let webOpacity = 1;
+            let structuralEdgeAlpha = 1;
+
+            // Background stars
+            const bgStars = [];
+            for (let i = 0; i < 90; i++) {
+                bgStars.push({
+                    x: Math.random() * W,
+                    y: Math.random() * H,
+                    r: Math.random() * 1.5 + 0.3,
+                    twinkle: Math.random() * Math.PI * 2,
+                    speed: Math.random() * 0.03 + 0.01,
+                    alpha: Math.random() * 0.6 + 0.3
+                });
+            }
+
+            // ──────────────────────────────────────
+            // Helper: get node position
+            // ──────────────────────────────────────
+            function getNodePos(nodeIdx) {
+                return nodes[nodeIdx];
+            }
+
+            function getEdgeEndpoints(edgeIndex) {
+                if (edgeIndex < totalStructuralEdges) {
+                    const e = allStructuralEdges[edgeIndex];
+                    return { a: nodes[e.a], b: nodes[e.b] };
+                } else {
+                    const ee = neuralExtraEdges[edgeIndex - totalStructuralEdges];
+                    return { a: nodes[ee.a], b: nodes[ee.b] };
+                }
+            }
+
+            function totalEdges() {
+                return totalStructuralEdges + neuralExtraEdges.length;
+            }
+
+            // ──────────────────────────────────────
+            // Spider drawing
+            // ──────────────────────────────────────
+            function drawSpider(x, y, alpha, facingAngle) {
+                if (alpha <= 0.01) return;
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.translate(x, y);
+                ctx.rotate(facingAngle);
+
+                // Body
+                const bodyGrad = ctx.createRadialGradient(0, 0, 1, 0, 0, 7);
+                bodyGrad.addColorStop(0, '#1a1a2e');
+                bodyGrad.addColorStop(1, '#0a0a15');
+                ctx.fillStyle = bodyGrad;
+                ctx.beginPath();
+                ctx.ellipse(0, 0, 6.5, 4.5, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(180,180,200,0.5)';
+                ctx.lineWidth = 0.8;
+                ctx.stroke();
+
+                // Cephalothorax dot
+                ctx.fillStyle = '#2a2a3a';
+                ctx.beginPath();
+                ctx.arc(3.5, -1, 2.8, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Legs
+                const legJoints = [
+                    [-2.5, -3.5, -7, -9, 0.7],
+                    [1.5, -3.8, 5, -10, 0.75],
+                    [-3, -1.5, -9, -3, 0.65],
+                    [2, -1.8, 8, -4, 0.7],
+                    [-3.2, 1.2, -8.5, 4, 0.6],
+                    [1.8, 1.5, 7.5, 5, 0.68],
+                    [-2, 3.2, -6, 8.5, 0.72],
+                    [1.2, 3, 5.5, 9, 0.74]
+                ];
+                ctx.strokeStyle = 'rgba(160,160,180,0.7)';
+                ctx.lineWidth = 1;
+                for (const [sx, sy, mx, my, tension] of legJoints) {
+                    ctx.beginPath();
+                    ctx.moveTo(sx, sy);
+                    const cpx = sx + (mx - sx) * tension;
+                    const cpy = sy + (my - sy) * tension;
+                    ctx.quadraticCurveTo(cpx, cpy, mx, my);
+                    ctx.stroke();
+                    // tiny foot
+                    ctx.fillStyle = 'rgba(200,200,210,0.5)';
+                    ctx.beginPath();
+                    ctx.arc(mx, my, 0.8, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+            }
+
+            // ──────────────────────────────────────
+            // Build phase: compute spider position
+            // ──────────────────────────────────────
+            function getSpiderPositionForBuild(progress) {
+                if (progress <= 0) return { x: CX, y: CY, edgeIdx: -1, frac: 0 };
+                if (progress >= 1) {
+                    const lastEdge = buildOrderEdges[buildOrderEdges.length - 1];
+                    const ep = getEdgeEndpoints(lastEdge);
+                    return { x: ep.b.x, y: ep.b.y, edgeIdx: lastEdge, frac: 1 };
+                }
+                const totalEdgesInBuild = buildOrderEdges.length;
+                const floatIdx = progress * totalEdgesInBuild;
+                const edgeIdx = Math.floor(floatIdx);
+                const frac = floatIdx - edgeIdx;
+                const actualEdge = buildOrderEdges[Math.min(edgeIdx, totalEdgesInBuild - 1)];
+                const ep = getEdgeEndpoints(actualEdge);
+                const x = ep.a.x + (ep.b.x - ep.a.x) * frac;
+                const y = ep.a.y + (ep.b.y - ep.a.y) * frac;
+                return { x, y, edgeIdx: actualEdge, frac };
+            }
+
+            function getBuiltEdgeCount(progress) {
+                if (progress <= 0) return 0;
+                if (progress >= 1) return buildOrderEdges.length;
+                return Math.floor(progress * buildOrderEdges.length);
+            }
+
+            function isEdgeBuilt(edgeIndex, progress) {
+                if (progress >= 1) return true;
+                const builtCount = getBuiltEdgeCount(progress);
+                // Check if edgeIndex is among first builtCount in buildOrderEdges
+                for (let i = 0; i < builtCount; i++) {
+                    if (buildOrderEdges[i] === edgeIndex) return true;
+                }
+                // Also handle the currently-being-built edge
+                const currentEdge = buildOrderEdges[Math.min(builtCount, buildOrderEdges.length - 1)];
+                return edgeIndex === currentEdge && progress < 1;
+            }
+
+            // ──────────────────────────────────────
+            // Neural signals
+            // ──────────────────────────────────────
+            function spawnNeuralSignal() {
+                const totalE = totalEdges();
+                if (totalE === 0) return null;
+                const edgeIdx = Math.floor(Math.random() * totalE);
+                const ep = getEdgeEndpoints(edgeIdx);
+                const pos = Math.random();
+                const speed = 0.15 + Math.random() * 0.55;
+                const dir = Math.random() < 0.5 ? 1 : -1;
+                return {
+                    edgeIndex: edgeIdx,
+                    position: pos,
+                    speed,
+                    direction: dir,
+                    life: 2.5 + Math.random() * 4,
+                    age: 0,
+                    color: Math.random() < 0.3 ?
+                        `hsl(${190 + Math.random()*40}, 90%, ${70 + Math.random()*25}%)` :
+                        `hsl(${200 + Math.random()*50}, 95%, ${72 + Math.random()*22}%)`,
+                    size: 1.8 + Math.random() * 3.5
+                };
+            }
+
+            function updateNeuralSignals(dt) {
+                // Spawn new signals
+                const targetCount = 28;
+                while (neuralSignals.length < targetCount) {
+                    const s = spawnNeuralSignal();
+                    if (s) neuralSignals.push(s);
+                }
+                // Update existing
+                for (let i = neuralSignals.length - 1; i >= 0; i--) {
+                    const s = neuralSignals[i];
+                    s.age += dt;
+                    s.position += s.speed * s.direction * dt;
+                    if (s.position >= 1.0 || s.position <= 0.0) {
+                        // Reached a node
+                        const ep = getEdgeEndpoints(s.edgeIndex);
+                        const nodeIdx = s.position >= 1.0 ? (s.edgeIndex < totalStructuralEdges ?
+                            allStructuralEdges[s.edgeIndex].b :
+                            neuralExtraEdges[s.edgeIndex - totalStructuralEdges].b) :
+                            (s.edgeIndex < totalStructuralEdges ?
+                                allStructuralEdges[s.edgeIndex].a :
+                                neuralExtraEdges[s.edgeIndex - totalStructuralEdges].a);
+                        const neighbors = adjacency.get(nodeIdx) || [];
+                        // Also add neural extra edges connected to this node
+                        const allNeighbors = [...neighbors];
+                        for (let ei = 0; ei < neuralExtraEdges.length; ei++) {
+                            const ne = neuralExtraEdges[ei];
+                            const globalEi = totalStructuralEdges + ei;
+                            if (ne.a === nodeIdx) allNeighbors.push({ node: ne.b, edgeIndex: globalEi });
+                            if (ne.b === nodeIdx) allNeighbors.push({ node: ne.a, edgeIndex: globalEi });
+                        }
+                        if (allNeighbors.length > 0 && s.age < s.life) {
+                            const next = allNeighbors[Math.floor(Math.random() * allNeighbors.length)];
+                            s.edgeIndex = next.edgeIndex;
+                            const nep = getEdgeEndpoints(s.edgeIndex);
+                            // Determine which end we're at
+                            const epA = nep.a;
+                            const epB = nep.b;
+                            const nodePos = nodes[nodeIdx];
+                            const distA = Math.hypot(nodePos.x - epA.x, nodePos.y - epA.y);
+                            const distB = Math.hypot(nodePos.x - epB.x, nodePos.y - epB.y);
+                            if (distA < distB) {
+                                s.position = 0;
+                                s.direction = 1;
+                            } else {
+                                s.position = 1;
+                                s.direction = -1;
+                            }
+                        } else {
+                            // Dead end or expired - respawn
+                            const ns = spawnNeuralSignal();
+                            if (ns) {
+                                neuralSignals[i] = ns;
+                            } else {
+                                neuralSignals.splice(i, 1);
+                            }
+                        }
+                    }
+                    if (s.age >= s.life) {
+                        const ns = spawnNeuralSignal();
+                        if (ns) {
+                            neuralSignals[i] = ns;
+                        } else {
+                            neuralSignals.splice(i, 1);
+                        }
+                    }
+                }
+            }
+
+            // ──────────────────────────────────────
+            // Dissolve particles
+            // ──────────────────────────────────────
+            function spawnDissolveParticle(nodeX, nodeY) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 20 + Math.random() * 100;
+                return {
+                    x: nodeX + (Math.random() - 0.5) * 10,
+                    y: nodeY + (Math.random() - 0.5) * 10,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed - 15 - Math.random() * 30,
+                    life: 1.2 + Math.random() * 2.5,
+                    age: 0,
+                    size: 1 + Math.random() * 3.5,
+                    color: Math.random() < 0.5 ?
+                        `hsl(${190 + Math.random()*35}, 85%, ${60 + Math.random()*35}%)` :
+                        `hsl(${210 + Math.random()*40}, 80%, ${55 + Math.random()*40}%)`
+                };
+            }
+
+            function updateDissolveParticles(dt) {
+                for (let i = dissolveParticles.length - 1; i >= 0; i--) {
+                    const p = dissolveParticles[i];
+                    p.age += dt;
+                    p.x += p.vx * dt;
+                    p.y += p.vy * dt;
+                    p.vy += 25 * dt; // slight gravity
+                    if (p.age >= p.life) dissolveParticles.splice(i, 1);
+                }
+            }
+
+            // ──────────────────────────────────────
+            // Generate neural extra edges
+            // ──────────────────────────────────────
+            function generateNeuralExtraEdges() {
+                neuralExtraEdges = [];
+                const candidates = [];
+                for (let i = 0; i < totalNodes; i++) {
+                    for (let j = i + 1; j < totalNodes; j++) {
+                        const ni = nodes[i];
+                        const nj = nodes[j];
+                        const dist = Math.hypot(ni.x - nj.x, ni.y - nj.y);
+                        if (dist < 160 && dist > 15) {
+                            // Check not already directly connected structurally
+                            let alreadyConnected = false;
+                            const adjI = adjacency.get(i) || [];
+                            for (const entry of adjI) {
+                                if (entry.node === j) { alreadyConnected = true; break; }
+                            }
+                            if (!alreadyConnected) {
+                                candidates.push({ a: i, b: j, dist });
+                            }
+                        }
+                    }
+                }
+                // Shuffle and pick ~55
+                for (let i = candidates.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+                }
+                const count = Math.min(55, candidates.length);
+                for (let i = 0; i < count; i++) {
+                    neuralExtraEdges.push({ a: candidates[i].a, b: candidates[i].b });
+                }
+                // Add these to adjacency temporarily for signal routing
+                for (let ei = 0; ei < neuralExtraEdges.length; ei++) {
+                    const ne = neuralExtraEdges[ei];
+                    addAdjEntry(ne.a, ne.b, totalStructuralEdges + ei);
+                }
+            }
+
+            function clearNeuralExtraEdges() {
+                // Remove neural extra edges from adjacency
+                for (let ei = 0; ei < neuralExtraEdges.length; ei++) {
+                    const ne = neuralExtraEdges[ei];
+                    const adjA = adjacency.get(ne.a);
+                    const adjB = adjacency.get(ne.b);
+                    if (adjA) {
+                        const idx = adjA.findIndex(e => e.edgeIndex === totalStructuralEdges + ei);
+                        if (idx >= 0) adjA.splice(idx, 1);
+                    }
+                    if (adjB) {
+                        const idx = adjB.findIndex(e => e.edgeIndex === totalStructuralEdges + ei);
+                        if (idx >= 0) adjB.splice(idx, 1);
+                    }
+                }
+                neuralExtraEdges = [];
+            }
+
+            // ──────────────────────────────────────
+            // Reset for new cycle
+            // ──────────────────────────────────────
+            function resetCycle() {
+                buildProgress = 0;
+                spiderPos = { x: CX, y: CY };
+                spiderVisible = true;
+                spiderAlpha = 1;
+                spiderTrail = [];
+                neuralSignals = [];
+                clearNeuralExtraEdges();
+                neuralGlowIntensity = 0;
+                dissolveParticles = [];
+                dissolveOpacity = 1;
+                webOpacity = 1;
+                structuralEdgeAlpha = 1;
+                phase = PHASE_BUILDING;
+                phaseStartTime = performance.now() / 1000;
+                cycleStartTime = phaseStartTime;
+            }
+
+            // ──────────────────────────────────────
+            // Drawing helpers
+            // ──────────────────────────────────────
+            function drawGlowEdge(x1, y1, x2, y2, color, width, glowSize, alpha) {
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.strokeStyle = color;
+                ctx.lineWidth = width;
+                ctx.shadowColor = color;
+                ctx.shadowBlur = glowSize;
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+                ctx.restore();
+            }
+
+            function drawNodeGlow(x, y, radius, color, glowSize, alpha) {
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = color;
+                ctx.shadowColor = color;
+                ctx.shadowBlur = glowSize;
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+                ctx.restore();
+            }
+
+            // ──────────────────────────────────────
+            // Main draw
+            // ──────────────────────────────────────
+            function drawBackground(time) {
+                // Deep space background
+                const bgGrad = ctx.createRadialGradient(CX, CY, 50, CX, CY, 600);
+                bgGrad.addColorStop(0, '#0d0d24');
+                bgGrad.addColorStop(0.7, '#060615');
+                bgGrad.addColorStop(1, '#02020c');
+                ctx.fillStyle = bgGrad;
+                ctx.fillRect(0, 0, W, H);
+
+                // Stars
+                for (const star of bgStars) {
+                    const twinkle = 0.5 + 0.5 * Math.sin(star.twinkle + time * star.speed * 3);
+                    const alpha = star.alpha * twinkle;
+                    ctx.fillStyle = `rgba(200,220,255,${alpha})`;
+                    ctx.beginPath();
+                    ctx.arc(star.x, star.y, star.r, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            function drawWebStructure(alpha, edgeAlphaMap) {
+                // Draw radial edges
+                for (let ei = 0; ei < radialEdges.length; ei++) {
+                    const ea = edgeAlphaMap ? (edgeAlphaMap[ei] || 0) : alpha;
+                    if (ea < 0.005) continue;
+                    const e = radialEdges[ei];
+                    const a = nodes[e.a];
+                    const b = nodes[e.b];
+                    ctx.strokeStyle = `rgba(200,210,225,${ea})`;
+                    ctx.lineWidth = 0.7;
+                    ctx.beginPath();
+                    ctx.moveTo(a.x, a.y);
+                    ctx.lineTo(b.x, b.y);
+                    ctx.stroke();
+                }
+                // Draw spiral edges
+                for (let ei = 0; ei < spiralEdges.length; ei++) {
+                    const globalEi = radialEdges.length + ei;
+                    const ea = edgeAlphaMap ? (edgeAlphaMap[globalEi] || 0) : alpha;
+                    if (ea < 0.005) continue;
+                    const e = spiralEdges[ei];
+                    const a = nodes[e.a];
+                    const b = nodes[e.b];
+                    ctx.strokeStyle = `rgba(190,200,218,${ea})`;
+                    ctx.lineWidth = 0.6;
+                    ctx.beginPath();
+                    ctx.moveTo(a.x, a.y);
+                    ctx.lineTo(b.x, b.y);
+                    ctx.stroke();
+                }
+            }
+
+            function drawNeuralWeb(time) {
+                const glowAlpha = neuralGlowIntensity;
+                if (glowAlpha < 0.01) return;
+
+                // Draw structural edges with glow
+                for (let ei = 0; ei < totalStructuralEdges; ei++) {
+                    const e = allStructuralEdges[ei];
+                    const a = nodes[e.a];
+                    const b = nodes[e.b];
+                    const pulse = 0.7 + 0.3 * Math.sin(time * 4 + ei * 0.7);
+                    const alpha = glowAlpha * pulse;
+                    const hue = 195 + Math.sin(ei * 0.5 + time) * 15;
+                    const color = `hsla(${hue},85%,${55 + pulse * 20}%,${alpha})`;
+                    drawGlowEdge(a.x, a.y, b.x, b.y, color, 1.4, 10, alpha);
+                    // Core
+                    ctx.strokeStyle = `rgba(180,230,255,${alpha*0.9})`;
+                    ctx.lineWidth = 0.5;
+                    ctx.beginPath();
+                    ctx.moveTo(a.x, a.y);
+                    ctx.lineTo(b.x, b.y);
+                    ctx.stroke();
+                }
+
+                // Draw neural extra edges
+                for (let ei = 0; ei < neuralExtraEdges.length; ei++) {
+                    const ne = neuralExtraEdges[ei];
+                    const a = nodes[ne.a];
+                    const b = nodes[ne.b];
+                    const pulse = 0.6 + 0.4 * Math.sin(time * 5.5 + ei * 1.3);
+                    const alpha = glowAlpha * pulse * 0.8;
+                    const hue = 260 + Math.sin(ei * 0.8 + time * 1.2) * 25;
+                    const color = `hsla(${hue},75%,${50 + pulse * 22}%,${alpha})`;
+                    drawGlowEdge(a.x, a.y, b.x, b.y, color, 1.0, 7, alpha);
+                }
+
+                // Draw nodes with glow
+                for (let i = 0; i < totalNodes; i++) {
+                    const n = nodes[i];
+                    const pulse = 0.6 + 0.4 * Math.sin(time * 6 + i * 0.9);
+                    const alpha = glowAlpha * pulse;
+                    const hue = 195 + Math.sin(i * 0.6 + time) * 20;
+                    drawNodeGlow(n.x, n.y, 2.2 + pulse * 1.8, `hsla(${hue},90%,${65+pulse*25}%,${alpha})`, 8, alpha);
+                }
+            }
+
+            function drawSignals(time) {
+                for (const s of neuralSignals) {
+                    const ep = getEdgeEndpoints(s.edgeIndex);
+                    const x = ep.a.x + (ep.b.x - ep.a.x) * s.position;
+                    const y = ep.a.y + (ep.b.y - ep.a.y) * s.position;
+                    const alpha = neuralGlowIntensity * (0.7 + 0.3 * Math.sin(time * 10 + s.age * 12));
+                    // Glow
+                    drawNodeGlow(x, y, s.size, s.color, 12, alpha);
+                    // Core
+                    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+                    ctx.beginPath();
+                    ctx.arc(x, y, s.size * 0.45, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            function drawDissolveParticles() {
+                for (const p of dissolveParticles) {
+                    const alpha = Math.max(0, 1 - p.age / p.life);
+                    const size = p.size * (1 - p.age / p.life);
+                    drawNodeGlow(p.x, p.y, size, p.color, 5, alpha);
+                }
+            }
+
+            function drawSpiderTrail() {
+                if (spiderTrail.length < 2 || spiderAlpha < 0.1) return;
+                ctx.strokeStyle = `rgba(180,195,220,${spiderAlpha*0.3})`;
+                ctx.lineWidth = 0.5;
+                ctx.setLineDash([3, 8]);
+                ctx.beginPath();
+                ctx.moveTo(spiderTrail[0].x, spiderTrail[0].y);
+                for (let i = 1; i < spiderTrail.length; i++) {
+                    ctx.lineTo(spiderTrail[i].x, spiderTrail[i].y);
+                }
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // ──────────────────────────────────────
+            // Main loop
+            // ──────────────────────────────────────
+            function animate(timestamp) {
+                const time = timestamp / 1000;
+                const elapsedInCycle = (time - cycleStartTime) % TOTAL_CYCLE;
+                const cycleTime = elapsedInCycle;
+
+                // Determine phase
+                let newPhase;
+                if (cycleTime < BUILD_DURATION) {
+                    newPhase = PHASE_BUILDING;
+                } else if (cycleTime < BUILD_DURATION + NEURAL_DURATION) {
+                    newPhase = PHASE_NEURAL;
+                } else if (cycleTime < BUILD_DURATION + NEURAL_DURATION + DISSOLVE_DURATION) {
+                    newPhase = PHASE_DISSOLVE;
+                } else {
+                    newPhase = PHASE_REST;
+                }
+
+                // Phase transition handling
+                if (newPhase !== phase) {
+                    if (newPhase === PHASE_NEURAL) {
+                        // Entering neural phase
+                        generateNeuralExtraEdges();
+                        neuralSignals = [];
+                        neuralGlowIntensity = 0;
+                        spiderVisible = false;
+                        spiderAlpha = 0;
+                        spiderTrail = [];
+                        webOpacity = 1;
+                        structuralEdgeAlpha = 1;
+                        dissolveParticles = [];
+                    } else if (newPhase === PHASE_DISSOLVE) {
+                        // Entering dissolve
+                        dissolveParticles = [];
+                        dissolveOpacity = 1;
+                        webOpacity = 1;
+                        structuralEdgeAlpha = 1;
+                        // Spawn initial dissolve particles from all nodes
+                        for (let i = 0; i < totalNodes; i++) {
+                            if (Math.random() < 0.7) {
+                                dissolveParticles.push(spawnDissolveParticle(nodes[i].x, nodes[i].y));
+                            }
+                        }
+                        neuralSignals = [];
+                        clearNeuralExtraEdges();
+                        neuralGlowIntensity = 0;
+                    } else if (newPhase === PHASE_BUILDING && phase === PHASE_REST) {
+                        // New cycle
+                        resetCycle();
+                        cycleStartTime = time - cycleTime; // adjust so cycleTime aligns
+                    }
+                    phase = newPhase;
+                    phaseStartTime = time;
+                }
+
+                const dt = Math.min(0.1, 1 / 60); // Cap dt
+
+                // Update based on phase
+                if (phase === PHASE_BUILDING) {
+                    const phaseElapsed = cycleTime;
+                    buildProgress = Math.min(1, phaseElapsed / BUILD_DURATION);
+                    // Ease in-out
+                    buildProgress = buildProgress < 0.5 ?
+                        2 * buildProgress * buildProgress :
+                        -1 + (4 - 2 * buildProgress) * buildProgress;
+                    buildProgress = Math.max(0, Math.min(1, buildProgress));
+
+                    const sp = getSpiderPositionForBuild(buildProgress);
+                    spiderPos = { x: sp.x, y: sp.y };
+                    spiderVisible = true;
+                    spiderAlpha = 1;
+                    webOpacity = 1;
+                    structuralEdgeAlpha = 1;
+
+                    // Update spider trail
+                    spiderTrail.push({ x: spiderPos.x, y: spiderPos.y });
+                    if (spiderTrail.length > 40) spiderTrail.shift();
+                    if (buildProgress < 0.001) spiderTrail = [];
+
+                    // Fade dissolve particles if any left over
+                    dissolveParticles = [];
+                    neuralGlowIntensity = 0;
+                    neuralSignals = [];
+                    clearNeuralExtraEdges();
+                } else if (phase === PHASE_NEURAL) {
+                    const phaseElapsed = cycleTime - BUILD_DURATION;
+                    const neuralProgress = Math.min(1, phaseElapsed / NEURAL_DURATION);
+                    // Fade in glow
+                    neuralGlowIntensity = Math.min(1, neuralProgress * 3);
+                    if (neuralProgress > 0.85) {
+                        neuralGlowIntensity = Math.max(0, 1 - (neuralProgress - 0.85) / 0.15);
+                    }
+                    webOpacity = 1;
+                    structuralEdgeAlpha = 1;
+                    updateNeuralSignals(dt);
+                    spiderVisible = false;
+                    spiderAlpha = 0;
+                    spiderTrail = [];
+                    dissolveParticles = [];
+                    buildProgress = 1;
+                } else if (phase === PHASE_DISSOLVE) {
+                    const phaseElapsed = cycleTime - BUILD_DURATION - NEURAL_DURATION;
+                    const dissolveProgress = Math.min(1, phaseElapsed / DISSOLVE_DURATION);
+                    dissolveOpacity = 1 - dissolveProgress;
+                    webOpacity = 1 - dissolveProgress;
+                    structuralEdgeAlpha = Math.max(0, 1 - dissolveProgress * 1.2);
+                    neuralGlowIntensity = Math.max(0, neuralGlowIntensity - dt * 2.5);
+                    updateDissolveParticles(dt);
+                    // Spawn more particles
+                    if (dissolveProgress < 0.7 && Math.random() < 0.6) {
+                        const ni = Math.floor(Math.random() * totalNodes);
+                        dissolveParticles.push(spawnDissolveParticle(nodes[ni].x, nodes[ni].y));
+                    }
+                    neuralSignals = [];
+                    spiderVisible = false;
+                    spiderAlpha = 0;
+                    spiderTrail = [];
+                    buildProgress = 1;
+                } else if (phase === PHASE_REST) {
+                    // Everything is reset, dark canvas
+                    webOpacity = 0;
+                    structuralEdgeAlpha = 0;
+                    neuralGlowIntensity = 0;
+                    neuralSignals = [];
+                    dissolveParticles = [];
+                    spiderVisible = false;
+                    spiderAlpha = 0;
+                    spiderTrail = [];
+                    buildProgress = 0;
+                    clearNeuralExtraEdges();
+                    updateDissolveParticles(dt);
+                }
+
+                // ── DRAW ──────────────────────────
+                ctx.clearRect(0, 0, W, H);
+                drawBackground(time);
+
+                if (phase === PHASE_BUILDING) {
+                    // Compute which edges are built
+                    const builtCount = getBuiltEdgeCount(buildProgress);
+                    const edgeAlphaMap = {};
+                    for (let i = 0; i < builtCount; i++) {
+                        edgeAlphaMap[buildOrderEdges[i]] = 1;
+                    }
+                    // Partially built current edge
+                    if (buildProgress < 1 && builtCount < buildOrderEdges.length) {
+                        const currentEdge = buildOrderEdges[builtCount];
+                        const sp = getSpiderPositionForBuild(buildProgress);
+                        edgeAlphaMap[currentEdge] = sp.frac;
+                    }
+                    drawWebStructure(webOpacity, edgeAlphaMap);
+
+                    // Draw nodes that are connected to built edges
+                    const builtNodes = new Set();
+                    builtNodes.add(0); // center always there
+                    for (let i = 0; i < builtCount; i++) {
+                        const e = allStructuralEdges[buildOrderEdges[i]];
+                        builtNodes.add(e.a);
+                        builtNodes.add(e.b);
+                    }
+                    if (buildProgress < 1 && builtCount < buildOrderEdges.length) {
+                        const e = allStructuralEdges[buildOrderEdges[builtCount]];
+                        builtNodes.add(e.a);
+                        builtNodes.add(e.b);
+                    }
+                    for (const ni of builtNodes) {
+                        const n = nodes[ni];
+                        ctx.fillStyle = 'rgba(210,215,230,0.7)';
+                        ctx.beginPath();
+                        ctx.arc(n.x, n.y, 1.6, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+
+                    drawSpiderTrail();
+                    if (spiderVisible && spiderAlpha > 0.01) {
+                        const sp = getSpiderPositionForBuild(buildProgress);
+                        let facingAngle = 0;
+                        if (spiderTrail.length >= 2) {
+                            const prev = spiderTrail[spiderTrail.length - 2];
+                            facingAngle = Math.atan2(sp.y - prev.y, sp.x - prev.x);
+                        }
+                        drawSpider(sp.x, sp.y, spiderAlpha, facingAngle);
+                    }
+                } else if (phase === PHASE_NEURAL) {
+                    // Draw structural web faintly then neural glow
+                    const baseAlpha = Math.max(0, 1 - neuralGlowIntensity * 0.6);
+                    if (baseAlpha > 0.02) {
+                        drawWebStructure(baseAlpha * webOpacity, null);
+                    }
+                    drawNeuralWeb(time);
+                    drawSignals(time);
+                    // Draw some structural nodes subtly
+                    for (let i = 0; i < totalNodes; i++) {
+                        const n = nodes[i];
+                        const alpha = baseAlpha * 0.5;
+                        if (alpha > 0.01) {
+                            ctx.fillStyle = `rgba(180,200,220,${alpha})`;
+                            ctx.beginPath();
+                            ctx.arc(n.x, n.y, 1.2, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                    }
+                } else if (phase === PHASE_DISSOLVE) {
+                    // Fading web
+                    if (structuralEdgeAlpha > 0.005) {
+                        drawWebStructure(structuralEdgeAlpha, null);
+                    }
+                    // Residual neural glow
+                    if (neuralGlowIntensity > 0.01) {
+                        drawNeuralWeb(time);
+                        drawSignals(time);
+                    }
+                    drawDissolveParticles();
+                    // Fading nodes
+                    for (let i = 0; i < totalNodes; i++) {
+                        const n = nodes[i];
+                        const alpha = structuralEdgeAlpha * 0.6;
+                        if (alpha > 0.01) {
+                            ctx.fillStyle = `rgba(170,190,210,${alpha})`;
+                            ctx.beginPath();
+                            ctx.arc(n.x, n.y, 1.0, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                    }
+                } else if (phase === PHASE_REST) {
+                    // Only background stars and maybe lingering particles
+                    drawDissolveParticles();
+                    updateDissolveParticles(dt);
+                }
+
+                // Subtle vignette
+                const vignetteGrad = ctx.createRadialGradient(CX, CY, MAX_RADIUS + 20, CX, CY, 560);
+                vignetteGrad.addColorStop(0, 'rgba(0,0,0,0)');
+                vignetteGrad.addColorStop(1, 'rgba(0,0,0,0.55)');
+                ctx.fillStyle = vignetteGrad;
+                ctx.fillRect(0, 0, W, H);
+
+                requestAnimationFrame(animate);
+            }
+
+            // ──────────────────────────────────────
+            // Start
+            // ──────────────────────────────────────
+            resetCycle();
+            requestAnimationFrame(animate);
+        })();
+    </script>
+</body>
+</html>

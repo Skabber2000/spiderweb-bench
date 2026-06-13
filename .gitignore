@@ -5,6 +5,8 @@ media/judge/_*.png
 media/frame_check.png
 media/why_compare.png
 media/claude_new.png
+media/_validate/
+media/_validate.png
 
 # python
 __pycache__/

@@ -13,6 +13,10 @@ aesthetic judgment, and self-contained engineering (one file, no deps, 60 fps).
 
 ![SpiderWeb Bench — comparison](media/showcase.png)
 
+🌐 **Live demo → [skabber2000.github.io/spiderweb-bench/viewer/showcase.html](https://skabber2000.github.io/spiderweb-bench/viewer/showcase.html)**
+(all 8 models rendering live, side by side) ·
+🎞️ **[animation gallery (one by one)](https://skabber2000.github.io/spiderweb-bench/viewer/gifs.html)**
+
 ▶ **[Watch the side-by-side comparison video](media/spiderweb_bench_compare.mp4)** ·
 🗂️ run each model live in [`viewer/gallery.html`](viewer/gallery.html)
 
@@ -67,10 +71,12 @@ SpiderWeb_Bench/
 ├── run_benchmark.py          # multi-provider one-shot runner (env-key driven)
 ├── judge_panel.py            # blind LLM judge panel (kept for transparency — see caveat)
 ├── record_showcase.py        # serve + Playwright-record the showcase → MP4 (ffmpeg)
+├── record_gifs.py            # per-model 2-cycle GIFs, timing-aligned to a common length
 ├── capture_filmstrip.py      # 9-frame filmstrip per model (for quality review)
 ├── viewer/
 │   ├── gallery.html          # side-by-side, run-live, manual scoring + leaderboard
-│   └── showcase.html         # flag-grouped comparison layout (used for the video)
+│   ├── showcase.html         # flag-grouped comparison layout (used for the video)
+│   └── gifs.html             # one-by-one animation gallery (2 cycles, time-aligned)
 ├── scores/                   # evaluation.md, notes.md, eval_results.json, logs
 ├── media/                    # comparison video, filmstrips, montages, stills
 └── submissions/<model-id>/   # index.html (raw model output) + meta.json
@@ -88,6 +94,9 @@ python -m http.server 8099             # then open viewer/gallery.html
 
 # 3. Record the comparison video
 python record_showcase.py --seconds 55
+
+# 4. Build the one-by-one animation gallery (per-model 2-cycle GIFs, time-aligned to 10s)
+python record_gifs.py --target 10        # then open viewer/gifs.html
 ```
 
 Keys (env): `OPENAI_API_KEY`, `XAI_API_KEY`, `GEMINI_API_KEY`, `ZHIPU_API_KEY`,

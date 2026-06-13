@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpiderWeb Bench — Animation Gallery (1-by-1)</title>
+<style>
+  :root{ --txt:#e6ecf6; --dim:#8b97ad; --gold:#ffd34d; --line:#26314a; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{color:var(--txt);font-family:"Segoe UI",Inter,system-ui,sans-serif;
+    background:radial-gradient(1400px 700px at 50% -6%, #131a2b 0%, #0a0d16 55%, #050609 100%);
+    min-height:100vh;padding:48px 20px 80px}
+  .wrap{max-width:760px;margin:0 auto}
+  header{text-align:center;margin-bottom:10px}
+  header h1{font-size:30px;font-weight:800;letter-spacing:.01em}
+  header h1 b{color:#5fd0ff}
+  header .tag{margin-top:8px;font-size:12px;color:var(--dim);letter-spacing:.22em;text-transform:uppercase}
+  header .note{max-width:600px;margin:16px auto 0;font-size:13px;color:#aeb9cc;line-height:1.6}
+  header .note b{color:var(--gold)}
+  header .note .syn{color:#7fe0a0}
+
+  .card{margin-top:34px;background:linear-gradient(180deg,rgba(20,28,44,.66),rgba(12,17,28,.6));
+    border:1px solid var(--line);border-radius:20px;overflow:hidden;
+    box-shadow:0 36px 90px -40px rgba(0,0,0,.95)}
+  .chead{display:flex;align-items:center;gap:14px;padding:18px 22px 14px}
+  .rank{font-size:30px;font-weight:800;color:#475472;min-width:46px;
+    font-variant-numeric:tabular-nums;line-height:1}
+  .dot{width:11px;height:11px;border-radius:50%;flex:0 0 11px}
+  .dot.us{background:#3b6fd6}.dot.cn{background:#de2910}.dot.eu{background:#ffcc00}
+  .who{flex:1 1 auto;min-width:0}
+  .who .m{font-size:19px;font-weight:700;letter-spacing:.01em}
+  .who .p{font-size:12px;color:var(--dim);letter-spacing:.06em}
+  .stars{font-size:16px;color:var(--gold);font-weight:700;white-space:nowrap}
+  .stars i{font-style:normal;display:block;font-size:9.5px;color:var(--dim);
+    letter-spacing:.4px;font-weight:400;text-align:right;margin-top:2px}
+
+  .stage{background:#000;border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center}
+  .stage img{display:block;width:100%;max-width:460px;height:auto;aspect-ratio:1/1}
+
+  .meta{display:flex;flex-wrap:wrap;gap:0;padding:0}
+  .meta .cell{flex:1 1 25%;min-width:90px;padding:13px 10px;text-align:center;
+    border-right:1px solid #1b2336}
+  .meta .cell:last-child{border-right:0}
+  .meta .k{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);font-weight:700}
+  .meta .v{font-size:15px;margin-top:4px;font-variant-numeric:tabular-nums;color:#fff;font-weight:600}
+  .cnote{padding:13px 22px 18px;font-size:12.5px;color:#aeb9cc;line-height:1.5;border-top:1px solid #1b2336}
+  .cnote b{color:#7fe0a0}
+
+  footer{text-align:center;margin-top:48px;font-size:11px;color:#586379;letter-spacing:.1em}
+  footer a{color:#5fd0ff;text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><b>Spider Web</b> → Neural Network</h1>
+    <div class="tag">one-shot LLM benchmark · animation gallery</div>
+    <div class="note">Each model received the identical 239-char prompt, zero-shot. Every clip below
+      shows <b>exactly 2 full cycles</b> (weave → neural → dissolve) and is <b>time-aligned to the
+      same 10-second length</b> — slower renders are accelerated, faster ones eased — so behavior is
+      compared on equal footing. <span class="syn">Ranked by quality.</span></div>
+  </header>
+  <div id="gallery"></div>
+  <footer>SpiderWeb Bench · live source at <a href="showcase.html">comparative showcase →</a></footer>
+</div>
+
+<script>
+const ROWS = [
+  {id:"gpt-5.5",         name:"GPT-5.5",          prov:"OpenAI",     region:"us", stars:"★★★★½", note:"organic · complete",       time:"157 s", tok:"8.7k",  size:"13.8 KB", tag:"Top-2 leader. Organically asymmetric weave with a faithful web→neural transition.", best:true},
+  {id:"claude-opus-4.8", name:"Claude Opus 4.8",  prov:"Anthropic",  region:"us", stars:"★★★★½", note:"most authentic weave",      time:"41 s",  tok:"4.2k",  size:"7.7 KB",  tag:"Top-2 leader. The most authentic thread-by-thread weave; tightest, smallest code.", best:true},
+  {id:"minimax-m3",      name:"MiniMax M3",       prov:"MiniMax",    region:"cn", stars:"★★★★",  note:"best weave behavior",       time:"13m 5s",tok:"16.3k", size:"17.7 KB", tag:"Best weave <b>behavior</b> of the rest — but mechanically symmetric, and slowest by far."},
+  {id:"deepseek-v4",     name:"DeepSeek V4 Pro",  prov:"DeepSeek",   region:"cn", stars:"★★★★",  note:"dense · faithful",          time:"174 s", tok:"16.9k", size:"40 KB",   tag:"Dense and faithful to the brief; symmetric weave, heaviest output."},
+  {id:"glm-5.1",         name:"GLM-5.1",          prov:"Zhipu",      region:"cn", stars:"★★★★",  note:"full cycle",                time:"517 s", tok:"29.4k", size:"13.7 KB", tag:"Completes the full cycle cleanly; symmetric, highest token spend."},
+  {id:"gemini-3-pro",    name:"Gemini 3.5 Flash", prov:"Google",     region:"us", stars:"★★★½",  note:"mild asym · busy HUD",      time:"158 s", tok:"9.9k",  size:"37 KB",   tag:"Mild asymmetry, but a busy HUD distracts from the web→network read."},
+  {id:"grok-4",          name:"Grok 4",           prov:"xAI",        region:"us", stars:"★★½",   note:"buggy signals",             time:"26 s",  tok:"1.9k",  size:"5.6 KB",  tag:"Fastest and cheapest, but buggy signal rendering breaks the effect."},
+  {id:"mistral-large",   name:"Mistral Large",    prov:"Mistral AI", region:"eu", stars:"★★",    note:"random graph",              time:"32 s",  tok:"2.7k",  size:"11.6 KB", tag:"\"Network\" is a random graph unrelated to the woven web — misses the core idea."},
+];
+
+const g = document.getElementById("gallery");
+ROWS.forEach((r,i)=>{
+  const card = document.createElement("div");
+  card.className = "card";
+  card.innerHTML = `
+    <div class="chead">
+      <div class="rank">${i+1}</div>
+      <div class="dot ${r.region}"></div>
+      <div class="who"><div class="m">${r.name}</div><div class="p">${r.prov}</div></div>
+      <div class="stars">${r.stars}<i>${r.note}</i></div>
+    </div>
+    <div class="stage"><img loading="lazy" alt="${r.name} — spider web to neural network animation"
+         src="../media/gifs/${r.id}.gif"></div>
+    <div class="meta">
+      <div class="cell"><div class="k">Time</div><div class="v">${r.time}</div></div>
+      <div class="cell"><div class="k">Tokens</div><div class="v">${r.tok}</div></div>
+      <div class="cell"><div class="k">Code size</div><div class="v">${r.size}</div></div>
+      <div class="cell"><div class="k">Quality</div><div class="v" style="color:#ffd34d">${r.stars}</div></div>
+    </div>
+    <div class="cnote">${r.tag}</div>`;
+  g.appendChild(card);
+});
+</script>
+</body>
+</html>

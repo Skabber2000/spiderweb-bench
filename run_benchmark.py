@@ -52,6 +52,7 @@ PROVIDERS = {
     "minimax-m2":    dict(kind="openai", env="MINIMAX_API_KEY", base="https://api.minimax.io/v1",            model="MiniMax-M2",         provider="MiniMax"),
     "mistral-large": dict(kind="openai", env="MISTRAL_API_KEY", base="https://api.mistral.ai/v1",            model="mistral-large-latest",provider="Mistral"),
     "deepseek-v4":   dict(kind="openai", env="DEEPSEEK_API_KEY",base="https://api.deepseek.com",             model="deepseek-v4-pro",    provider="DeepSeek", maxtok=65000, timeout=600),
+    "kimi-k3":       dict(kind="openai", env="MOONSHOT_API_KEY",base="https://api.moonshot.ai/v1",           model="kimi-k3",            provider="Moonshot", maxtok=65000, timeout=600, temp=1),
     "gemini-3-pro":  dict(kind="gemini", env="GEMINI_API_KEY",  base="https://generativelanguage.googleapis.com/v1beta", model="gemini-3.5-flash", provider="Google"),
     "claude-opus-4.8":dict(kind="anthropic", env="ANTHROPIC_API_KEY", base="https://api.anthropic.com/v1",   model="claude-opus-4-8",    provider="Anthropic", maxtok=32000, timeout=600),
 }
@@ -76,7 +77,7 @@ def call_openai(cfg, key, prompt):
     if is_oai_reasoning:
         payload["max_completion_tokens"] = cfg.get("maxtok", 32000)
     else:
-        payload["temperature"] = 0.7
+        payload["temperature"] = cfg.get("temp", 0.7)
         payload["max_tokens"] = cfg.get("maxtok", 16000)
     j = _post(url, headers, payload, timeout=cfg.get("timeout", 300))
     msg = j["choices"][0]["message"]

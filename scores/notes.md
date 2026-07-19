@@ -44,3 +44,11 @@ One-line verdict per model (filled in as you judge). Keep it blunt.
 - Signals move on random straight lines, not along actual edges.
 - Doesn't reset cleanly on loop (leaks, web doesn't regenerate, fps decays).
 - Multiple files / CDN dependency / requires a build step.
+
+## kimi-k3 (Moonshot, 2026-07-19)
+- One-shot via API (streamed). Provider forces `temperature=1` (only allowed value) — runner gained a per-provider `temp` override.
+- Reasoning model: several minutes of hidden thinking before code; ~15 min wall latency (slowest of all submissions).
+- Output: clean single 14.7 KB file, finish=stop, zero console errors.
+- Cycle: weave ~45 s (true thread-by-thread: anchors → radials → spiral, spider rides threads) → morph 1.7 s → neural 10 s → dissolve 4.4 s → loop.
+- Neural phase is faithful: nodes at real web intersections, pulses travel along actual threads, per-cycle hue shift.
+- Weaknesses: long quiet weave vs 10 s payoff (same pacing critique as Opus/Gemini); geometry only mildly irregular.

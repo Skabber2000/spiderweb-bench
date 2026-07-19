@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Weaver — Spider / Neural Web</title>
+<style>
+  html,body{
+    margin:0;height:100%;background:#030409;
+    display:flex;align-items:center;justify-content:center;overflow:hidden;
+  }
+  canvas{
+    width:min(92vmin,800px);height:min(92vmin,800px);
+    border-radius:10px;
+    box-shadow:0 0 90px rgba(60,80,200,.18),0 0 24px rgba(0,0,0,.8);
+  }
+</style>
+</head>
+<body>
+<canvas id="c" width="800" height="800"></canvas>
+<script>
+'use strict';
+const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+const W=800,H=800,TAU=Math.PI*2;
+const rand=(a,b)=>a+Math.random()*(b-a);
+const irand=(a,b)=>Math.floor(rand(a,b+1));
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const lerp=(a,b,t)=>a+(b-a)*t;
+const hsla=(h,s,l,a)=>`hsla(${((h%360)+360)%360},${s}%,${l}%,${a})`;
+
+let web,spider,queue,drawn,curSeg,pulses,parts,motes;
+let phase,phaseT,time=0,cycleHue=200,neuralDur=10,spawnTimer=0.5;
+
+/* ---------------- web construction ---------------- */
+function buildWeb(){
+  const cx=400+rand(-70,70),cy=395+rand(-55,55);
+  const S=irand(11,14),R=irand(7,9);
+  const angles=[],maxRs=[];
+  for(let s=0;s<S;s++)angles.push(s/S*TAU+rand(-0.05,0.05));
+  for(let s=0;s<S;s++){
+    const a=angles[s],dx=Math.cos(a),dy=Math.sin(a);
+    let t=1e9;
+    if(dx>1e-6)t=Math.min(t,(W-20-cx)/dx);else if(dx<-1e-6)t=Math.min(t,(20-cx)/dx);
+    if(dy>1e-6)t=Math.min(t,(H-20-cy)/dy);else if(dy<-1e-6)t=Math.min(t,(20-cy)/dy);
+    maxRs.push(t*rand(0.82,0.97));
+  }
+  const id=(i,s)=>i*S+(((s%S)+S)%S);
+  const nodes=[];
+  for(let i=0;i<R;i++){
+    const fr=Math.pow((i+1)/R,1.25)*0.94+0.05;
+    for(let s=0;s<S;s++){
+      const r=fr*maxRs[s]+rand(-2.5,2.5);
+      nodes.push({
+        x:cx+Math.cos(angles[s])*r,
+        y:cy+Math.sin(angles[s])*r,
+        ring:i,spoke:s,
+        hue:cycleHue+rand(-25,75)+i*4,
+        flash:0,reveal:0
+      });
+    }
+  }
+  const edges=[];
+  for(let s=0;s<S;s++)for(let i=0;i<R-1;i++)edges.push({a:id(i,s),b:id(i+1,s),charge:0});
+  for(let i=0;i<R;i++)for(let s=0;s<S;s++)edges.push({a:id(i,s),b:id(i,s+1),charge:0});
+  const adj=nodes.map(()=>[]);
+  edges.forEach((e,i)=>{adj[e.a].push(i);adj[e.b].push(i);});
+  edges.forEach(e=>{const A=nodes[e.a],B=nodes[e.b];e.len=Math.hypot(B.x-A.x,B.y-A.y)||1;});
+  return {cx,cy,S,R,angles,maxRs,nodes,edges,adj,id,baseHue:cycleHue};
+}
+
+/* ---------------- cycle / weaving plan ---------------- */
+function newCycle(){
+  cycleHue=[185,205,265,300,160,320][irand(0,5)]+rand(-12,12);
+  web=buildWeb();
+  drawn=[];curSeg=null;pulses=[];parts=[];
+  spider={x:web.cx,y:-30,a:Math.PI/2,stride:0,hidden:false};
+  queue=[{x:web.cx,y:web.cy,draw:true,kind:'drag',speed:95}];
+  buildWeavePlan();
+  phase='weave';phaseT=0;spawnTimer=0.4;
+}
+
+function buildWeavePlan(){
+  const {cx,cy,S,R,angles,maxRs,nodes,id}=web;
+  const s0=irand(0,S-1);
+  for(let k=0;k<S;k++){
+    const s=(s0+k)%S,o=nodes[id(R-1,s)];
+    queue.push({x:cx,y:cy,draw:false,speed:470});
+    queue.push({x:o.x,y:o.y,draw:true,kind:'spoke',speed:380});
+    if(Math.random()<0.5){
+      const a=angles[s];
+      queue.push({x:clamp(cx+Math.cos(a)*(maxRs[s]+90),6,W-6),
+                  y:clamp(cy+Math.sin(a)*(maxRs[s]+90),6,H-6),
+                  draw:true,kind:'frame',speed:380});
+      queue.push({x:o.x,y:o.y,draw:false,speed:470});
+    }
+    queue.push({x:cx,y:cy,draw:false,speed:480});
+  }
+  queue.push({x:nodes[id(0,s0)].x,y:nodes[id(0,s0)].y,draw:false,speed:470});
+  for(let i=0;i<R;i++){
+    for(let k=0;k<S;k++){
+      const n2=nodes[id(i,s0+k+1)];
+      queue.push({x:n2.x,y:n2.y,draw:true,kind:'spiral',speed:430});
+    }
+    if(i<R-1){
+      const no=nodes[id(i+1,s0)];
+      queue.push({x:no.x,y:no.y,draw:false,speed:480});
+    }
+  }
+  queue.push({x:cx,y:cy,draw:false,speed:500});
+  queue.push({marker:'done'});
+}
+
+/* ---------------- spider ---------------- */
+function updateSpider(dt){
+  if(spider.hidden||!queue.length)return;
+  const wp=queue[0];
+  if(wp.marker){queue.shift();onMarker(wp.marker);return;}
+  if(wp.draw&&!curSeg)curSeg={ax:spider.x,ay:spider.y,kind:wp.kind};
+  const dx=wp.x-spider.x,dy=wp.y-spider.y,d=Math.hypot(dx,dy);
+  const sp=wp.speed||300;
+  if(d<=sp*dt+0.6){
+    spider.x=wp.x;spider.y=wp.y;
+    if(wp.draw&&curSeg){
+      const seg={ax:curSeg.ax,ay:curSeg.ay,bx:wp.x,by:wp.y,kind:wp.kind};
+      if(wp.kind==='spiral'){
+        const len=Math.hypot(seg.bx-seg.ax,seg.by-seg.ay);
+        seg.cx=(seg.ax+seg.bx)/2+rand(-1,1);
+        seg.cy=(seg.ay+seg.by)/2+len*0.05+rand(1,3);
+      }
+      drawn.push(seg);curSeg=null;
+    }
+    queue.shift();return;
+  }
+  spider.x+=dx/d*sp*dt;spider.y+=dy/d*sp*dt;
+  spider.stride+=sp*dt;
+  const ta=Math.atan2(dy,dx);
+  let dd=ta-spider.a;
+  while(dd>Math.PI)dd-=TAU;while(dd<-Math.PI)dd+=TAU;
+  spider.a+=clamp(dd,-7*dt,7*dt);
+}
+
+function onMarker(m){
+  if(m==='done'){
+    phase='morph';phaseT=0;
+    web.nodes.forEach(n=>n.reveal=clamp(rand(0,0.55)+n.ring*0.03,0,0.8));
+    neuralDur=rand(9,13);
+  }
+}
+
+/* ---------------- neural pulses ---------------- */
+function spawnPulseAt(ni){
+  const opts=web.adj[ni];if(!opts.length)return;
+  const ei=opts[irand(0,opts.length-1)],e=web.edges[ei];
+  const to=(e.a===ni)?e.b:e.a;
+  web.nodes[ni].flash=Math.max(web.nodes[ni].flash,0.7);
+  pulses.push({ei,from:ni,to,d:0,v:rand(130,250),hue:web.nodes[ni].hue+rand(-15,15)});
+}
+function updatePulses(dt){
+  for(let i=pulses.length-1;i>=0;i--){
+    const p=pulses[i],e=web.edges[p.ei];
+    p.d+=p.v*dt;e.charge=Math.max(e.charge,0.85);
+    if(p.d>=e.len){
+      pulses.splice(i,1);
+      const n=web.nodes[p.to];n.flash=1;n.hue=p.hue;
+      const opts=web.adj[p.to].filter(x=>x!==p.ei);
+      if(opts.length&&Math.random()<0.88&&pulses.length<60){
+        const cont=()=>{
+          const ei2=opts[irand(0,opts.length-1)],e2=web.edges[ei2];
+          const to2=(e2.a===p.to)?e2.b:e2.a;
+          pulses.push({ei:ei2,from:p.to,to:to2,d:0,v:p.v*rand(0.85,1.15),hue:p.hue+rand(-18,18)});
+        };
+        cont();
+        if(Math.random()<0.32&&pulses.length<58)cont();
+      }
+    }
+  }
+}
+
+/* ---------------- dissolve ---------------- */
+function quadPt(s,t){const u=1-t;return{x:u*u*s.ax+2*u*t*s.cx+t*t*s.bx,y:u*u*s.ay+2*u*t*s.cy+t*t*s.by};}
+function segPoint(s,t){return s.kind==='spiral'?quadPt(s,t):{x:lerp(s.ax,s.bx,t),y:lerp(s.ay,s.by,t)};}
+function segLen(s){
+  if(s.kind!=='spiral')return Math.hypot(s.bx-s.ax,s.by-s.ay);
+  let L=0,px=s.ax,py=s.ay;
+  for(let k=1;k<=8;k++){const p=quadPt(s,k/8);L+=Math.hypot(p.x-px,p.y-py);px=p.x;py=p.y;}
+  return L;
+}
+function startDissolve(){
+  phase='dissolve';phaseT=0;parts=[];pulses=[];
+  const H0=web.baseHue;
+  for(const seg of drawn){
+    const n=Math.max(2,Math.ceil(segLen(seg)/13));
+    for(let k=0;k<n;k++){
+      const pt=segPoint(seg,(k+Math.random()*0.9)/n);
+      parts.push({x:pt.x,y:pt.y,
+        vx:rand(-14,14)+(pt.x-web.cx)*0.02,vy:rand(-26,-4),
+        life:1,decay:rand(0.16,0.34),
+        hue:H0+rand(-20,70),r:rand(0.6,1.7)});
+    }
+  }
+  web.nodes.forEach(n=>{
+    for(let k=0;k<2;k++)parts.push({x:n.x,y:n.y,vx:rand(-20,20),vy:rand(-30,-6),
+      life:1,decay:rand(0.14,0.3),hue:n.hue,r:rand(0.8,2)});
+  });
+  queue=[{x:web.cx,y:web.cy,draw:false,speed:340},{x:web.cx,y:-50,draw:false,speed:340}];
+}
+function updateParts(dt){
+  for(let i=parts.length-1;i>=0;i--){
+    const p=parts[i];
+    p.x+=p.vx*dt+Math.sin(time*2+p.y*0.03)*6*dt;
+    p.y+=p.vy*dt;p.vy-=6*dt;
+    p.vx*=Math.pow(0.98,dt*60);
+    p.life-=p.decay*dt;
+    if(p.life<=0)parts.splice(i,1);
+  }
+}
+
+/* ---------------- ambient motes ---------------- */
+function initMotes(){
+  motes=[];
+  for(let i=0;i<26;i++)motes.push({x:rand(0,W),y:rand(0,H),r:rand(0.5,1.4),
+    a:rand(0.03,0.10),sp:rand(2,9),ph:rand(0,TAU)});
+}
+function updateMotes(dt){
+  for(const m of motes){
+    m.y-=m.sp*dt;m.x+=Math.sin(time*0.5+m.ph)*4*dt;
+    if(m.y<-4){m.y=H+4;m.x=rand(0,W);}
+  }
+}
+
+/* ---------------- update ---------------- */
+function update(dt){
+  time+=dt;phaseT+=dt;
+  updateSpider(dt);
+  if(phase==='morph'){
+    spider.stride+=dt*4;
+    if(phaseT>1.7){
+      phase='neural';phaseT=0;
+      for(let i=0;i<10;i++)spawnPulseAt(irand(0,web.nodes.length-1));
+    }
+  }else if(phase==='neural'){
+    spider.stride+=dt*4;
+    spawnTimer-=dt;
+    if(spawnTimer<=0&&pulses.length<55){
+      spawnTimer=rand(0.12,0.35);
+      spawnPulseAt(irand(0,web.nodes.length-1));
+    }
+    updatePulses(dt);
+    if(phaseT>neuralDur)startDissolve();
+  }else if(phase==='dissolve'){
+    updateParts(dt);
+    if(!queue.length)spider.hidden=true;
+    if(phaseT>4.4)newCycle();
+  }
+  const f1=Math.pow(0.90,dt*60),f2=Math.pow(0.94,dt*60);
+  web.nodes.forEach(n=>n.flash*=f1);
+  web.edges.forEach(e=>e.charge*=f2);
+  updateMotes(dt);
+}
+
+/* ---------------- render ---------------- */
+function pathSeg(s){
+  ctx.beginPath();ctx.moveTo(s.ax,s.ay);
+  if(s.kind==='spiral')ctx.quadraticCurveTo(s.cx,s.cy,s.bx,s.by);
+  else ctx.lineTo(s.bx,s.by);
+}
+
+function drawWeb(glow,fade){
+  if(fade<=0)return;
+  ctx.lineCap='round';
+  if(glow>0.01){
+    ctx.globalCompositeOperation='lighter';
+    for(const seg of drawn){
+      const dim=(seg.kind==='frame'||seg.kind==='drag')?0.35:1;
+      const hue=web.baseHue+(((seg.ax+seg.bx)*0.02)%40)+time*6;
+      ctx.strokeStyle=hsla(hue,80,62,0.16*glow*fade*dim);
+      ctx.lineWidth=1.1;pathSeg(seg);ctx.stroke();
+    }
+    ctx.globalCompositeOperation='source-over';
+  }
+  for(let i=0;i<drawn.length;i++){
+    const seg=drawn[i],sh=0.75+0.25*Math.sin(time*1.5+i*1.3);
+    const dim=(seg.kind==='frame'||seg.kind==='drag')?0.4:1;
+    ctx.strokeStyle=`rgba(205,214,235,${(0.34*(1-glow*0.5)+0.06)*sh*fade*dim})`;
+    ctx.lineWidth=seg.kind==='drag'?0.8:1;
+    pathSeg(seg);ctx.stroke();
+  }
+  if(curSeg){
+    ctx.strokeStyle='rgba(235,242,255,0.85)';
+    ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(curSeg.ax,curSeg.ay);ctx.lineTo(spider.x,spider.y);ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,0.9)';
+    ctx.beginPath();ctx.arc(spider.x,spider.y,1.1,0,TAU);ctx.fill();
+  }
+}
+
+function drawNeural(glow,fade){
+  ctx.globalCompositeOperation='lighter';
+  const amb=ctx.createRadialGradient(web.cx,web.cy,10,web.cx,web.cy,340);
+  amb.addColorStop(0,hsla(web.baseHue+time*10,70,50,0.05*glow*fade));
+  amb.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=amb;ctx.fillRect(0,0,W,H);
+
+  for(const e of web.edges){
+    const c=e.charge*fade;if(c<0.03)continue;
+    const A=web.nodes[e.a],B=web.nodes[e.b];
+    ctx.strokeStyle=hsla((A.hue+B.hue)/2,95,65,0.5*c*glow);
+    ctx.lineWidth=1.8;
+    ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y);ctx.stroke();
+  }
+
+  const mp=phase==='morph'?clamp(phaseT/1.5,0,1):1;
+  for(const n of web.nodes){
+    let sc=1;
+    if(phase==='morph'){
+      const t=clamp((mp-n.reveal)/0.25,0,1);
+      if(t<=0)continue;
+      sc=t<0.7?(t/0.7)*1.3:1.3-0.3*((t-0.7)/0.3);
+    }
+    const h=n.hue+time*8;
+    ctx.fillStyle=hsla(h,85,70,(0.22+0.1*Math.sin(time*2+n.x))*glow*fade);
+    ctx.beginPath();ctx.arc(n.x,n.y,1.6*sc,0,TAU);ctx.fill();
+    if(n.flash>0.03){
+      const f=n.flash*glow*fade;
+      ctx.fillStyle=hsla(h,100,65,0.14*f);
+      ctx.beginPath();ctx.arc(n.x,n.y,(6+9*n.flash)*sc,0,TAU);ctx.fill();
+      ctx.fillStyle=hsla(h,100,75,0.35*f);
+      ctx.beginPath();ctx.arc(n.x,n.y,(3+4*n.flash)*sc,0,TAU);ctx.fill();
+      ctx.fillStyle=`rgba(255,255,255,${0.85*f})`;
+      ctx.beginPath();ctx.arc(n.x,n.y,1.8*sc,0,TAU);ctx.fill();
+    }
+  }
+
+  for(const p of pulses){
+    const e=web.edges[p.ei],A=web.nodes[p.from],B=web.nodes[p.to];
+    const t=clamp(p.d/e.len,0,1);
+    const x=lerp(A.x,B.x,t),y=lerp(A.y,B.y,t);
+    const a=0.9*glow*fade;
+    ctx.fillStyle=hsla(p.hue,100,70,0.18*a);
+    ctx.beginPath();ctx.arc(x,y,5.5,0,TAU);ctx.fill();
+    ctx.fillStyle=hsla(p.hue,100,80,0.5*a);
+    ctx.beginPath();ctx.arc(x,y,2.6,0,TAU);ctx.fill();
+    ctx.fillStyle=`rgba(255,255,255,${a})`;
+    ctx.beginPath();ctx.arc(x,y,1.2,0,TAU);ctx.fill();
+  }
+  ctx.globalCompositeOperation='source-over';
+}
+
+function drawParts(){
+  ctx.globalCompositeOperation='lighter';
+  for(const p of parts){
+    ctx.fillStyle=hsla(p.hue,90,70,0.7*p.life);
+    ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,TAU);ctx.fill();
+  }
+  ctx.globalCompositeOperation='source-over';
+}
+
+function drawSpider(glow){
+  const s=spider;
+  const bob=(phase==='neural'||phase==='morph')?Math.sin(time*2)*0.6:0;
+  ctx.save();ctx.translate(s.x,s.y+bob);ctx.rotate(s.a);
+  ctx.lineCap='round';
+  for(let side=-1;side<=1;side+=2){
+    for(let i=0;i<4;i++){
+      const la=side*(0.45+i*0.52);
+      const L=15-Math.abs(i-1.2)*2.2;
+      const sw=Math.sin(s.stride*0.22+i*1.9+(side>0?0:Math.PI))*2.4;
+      const hx=2-i*0.8,hy=side*2.2;
+      const fx=Math.cos(la)*(L+4)+sw*0.6;
+      const fy=Math.sin(la)*(L+4)+sw*0.3*side;
+      const kx=(hx+fx)/2+Math.cos(la)*3;
+      const ky=(hy+fy)/2+Math.sin(la)*3+side*2.5;
+      ctx.strokeStyle='#101018';ctx.lineWidth=1.3;
+      ctx.beginPath();ctx.moveTo(hx,hy);ctx.quadraticCurveTo(kx,ky,fx,fy);ctx.stroke();
+    }
+  }
+  ctx.fillStyle='#1b1b26';
+  ctx.beginPath();ctx.ellipse(-5.5,0,6.2,5,0,0,TAU);ctx.fill();
+  ctx.fillStyle=glow>0?hsla(web.baseHue+time*10,80,65,0.55*glow):'rgba(120,90,170,0.5)';
+  ctx.beginPath();ctx.ellipse(-6.5,0,2.6,1.6,0,0,TAU);ctx.fill();
+  ctx.fillStyle='#101018';
+  ctx.beginPath();ctx.arc(2.5,0,3.4,0,TAU);ctx.fill();
+  ctx.fillStyle=glow>0?hsla(web.baseHue+time*10,100,80,0.9):'rgba(210,70,90,0.85)';
+  ctx.beginPath();ctx.arc(5,-1.2,0.7,0,TAU);ctx.fill();
+  ctx.beginPath();ctx.arc(5,1.2,0.7,0,TAU);ctx.fill();
+  if(curSeg){
+    ctx.fillStyle='rgba(255,255,255,0.8)';
+    ctx.beginPath();ctx.arc(-11.5,0,0.8,0,TAU);ctx.fill();
+  }
+  ctx.restore();
+}
+
+function render(){
+  ctx.globalCompositeOperation='source-over';
+  const g=ctx.createRadialGradient(400,380,60,400,400,560);
+  g.addColorStop(0,'#0a0d18');g.addColorStop(1,'#04050a');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#8fa0c8';
+  for(const m of motes){
+    ctx.globalAlpha=m.a*(0.6+0.4*Math.sin(time+m.ph));
+    ctx.beginPath();ctx.arc(m.x,m.y,m.r,0,TAU);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+
+  const glow=phase==='morph'?clamp(phaseT/1.5,0,1):(phase==='neural'||phase==='dissolve')?1:0;
+  const fade=phase==='dissolve'?clamp(1-phaseT/2.6,0,1):1;
+
+  drawWeb(glow,fade);
+  if(glow>0)drawNeural(glow,fade);
+  if(phase==='dissolve')drawParts();
+  if(!spider.hidden)drawSpider(glow);
+}
+
+/* ---------------- main loop ---------------- */
+let last=performance.now();
+function frame(now){
+  const dt=Math.min(0.05,(now-last)/1000);
+  last=now;
+  update(dt);
+  render();
+  requestAnimationFrame(frame);
+}
+initMotes();
+newCycle();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

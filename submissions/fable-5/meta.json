@@ -1,0 +1,10 @@
+{
+  "model": "claude-fable-5",
+  "provider": "Anthropic",
+  "date": "2026-07-19",
+  "tokens_out": null,
+  "latency_s": null,
+  "bytes": 10213,
+  "has_canvas": true,
+  "notes": "generated interactively in Claude Code (terminal session), not via raw API; single-pass write, ~2 min wall. This is the true first-generation file per benchmark protocol - a post-hoc pacing fix (3x faster weave) was made outside the benchmark and is NOT included here."
+}

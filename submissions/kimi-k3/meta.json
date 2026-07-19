@@ -3,6 +3,8 @@
   "provider": "Moonshot",
   "date": "2026-07-19",
   "tokens_out": null,
-  "latency_s": null,
-  "notes": "streamed via API; finish=stop; reasoning model (None reasoning tokens); temperature=1 enforced by provider; latency ~15 min wall"
+  "latency_s": 900,
+  "notes": "streamed via API; finish=stop; reasoning model (None reasoning tokens); temperature=1 enforced by provider; latency ~15 min wall",
+  "bytes": 14678,
+  "has_canvas": true
 }

@@ -30,3 +30,19 @@ visual polish and code quality. Supersedes the earlier auto-judge panel, which w
   the leanest (Grok) and heaviest (GLM/MiniMax) are not the best.
 - **Why automated scoring failed Opus**: its payoff (the glowing neural net) is understated and
   arrives late, so still-frame/visual judges saw mostly its quiet weaving phase and under-scored it.
+
+## Addendum — late entrants (2026-07-19)
+
+Two submissions were added after the original 8-model review. They were **not** re-judged
+by the same reviewer under the same conditions; placements in the README table (#3–#4)
+were assigned by Fable 5 itself in the session that added them — treat as provisional.
+
+| # | Model | Quality | Rationale |
+|---|-------|:-------:|-----------|
+| 3 | Claude Fable 5 | ★★★★ | True thread-by-thread weave (spokes with return trips, then a continuous accelerating spiral) over an **asymmetric** jittered web; neural nodes appear at real thread intersections and signals propagate along a spiral+spoke adjacency graph — no free-floating pulses. Web re-randomized every cycle. Main defect: glacial first-generation pacing (~107 s/cycle), so the neural payoff arrives very late in-window. Generated interactively in Claude Code (not raw API); strict first-generation file preserved (a post-hoc pacing fix exists outside the benchmark). |
+| 4 | Kimi K3 | ★★★★ | The most deliberate orb-weaver *process* of the whole field: dragline drop from the top edge, radial spokes, then a sagging capture spiral — all planned upfront in a 54K-char reasoning stream (see `submissions/kimi-k3/reasoning_trace.md`) that includes self-verification arithmetic (~96 nodes, ~180 edges, ≤60 pulses, ~230 strokes/frame). Clean full cycle (weave ~57 s + neural 10 s + dissolve 4.4 s ≈ 74 s), 0 console errors, 120 fps. Costs: ~15 min generation wall time, largely symmetric geometry, and slow on-screen tempo. |
+
+Measured head-to-head (identical headless Chromium harness, 2026-07-19): both 120 fps,
+0 js errors; cycle ≈107 s (Fable first-gen) vs ≈74 s (Kimi); file 10.2 KB vs 14.7 KB.
+A split-screen real-time recording of the two (with Kimi's reasoning trace running as a
+terminal overlay) was produced outside the repo during the comparison session.

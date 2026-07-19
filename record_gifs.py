@@ -27,7 +27,8 @@ TMIN, TMAX = 3.0, 40.0
 
 # leaderboard order (rank) — only ids matter for recording
 MODELS = ["claude-opus-4.8","gpt-5.5","grok-4","gemini-3-pro",
-          "glm-5.1","deepseek-v4","minimax-m3","mistral-large"]
+          "glm-5.1","deepseek-v4","minimax-m3","mistral-large",
+          "fable-5","kimi-k3"]
 
 # code-derived cycle seconds (real-time animations); used when pixel self-similarity is weak
 FALLBACK_T = {
@@ -39,6 +40,8 @@ FALLBACK_T = {
     "claude-opus-4.8":10.0,
     "mistral-large":  10.0,
     "grok-4":         19.3,
+    "fable-5":       107.0,   # weave ~95 (170 px/s lay) + morph 2.2 + fire 7 + dissolve 2.4
+    "kimi-k3":        74.0,   # weave ~57 + morph 1.7 + neural 10 + dissolve 4.4 (measured)
 }
 SELFSIM_OK = 0.45            # trust detected period above this; else fall back to code
 

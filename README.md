@@ -14,7 +14,7 @@ aesthetic judgment, and self-contained engineering (one file, no deps, 60 fps).
 ![SpiderWeb Bench — comparison](media/showcase.png)
 
 🌐 **Live demo → [skabber2000.github.io/spiderweb-bench/viewer/showcase.html](https://skabber2000.github.io/spiderweb-bench/viewer/showcase.html)**
-(all 8 models rendering live, side by side) ·
+(all 10 models rendering live, side by side) ·
 🎞️ **[animation gallery (one by one)](https://skabber2000.github.io/spiderweb-bench/viewer/gifs.html)**
 
 ▶ **[Watch the side-by-side comparison video](media/spiderweb_bench_compare.mp4)** ·
@@ -22,7 +22,7 @@ aesthetic judgment, and self-contained engineering (one file, no deps, 60 fps).
 
 ---
 
-## 🏆 Results (8 models, one prompt, one shot)
+## 🏆 Results (10 models, one prompt, one shot)
 
 Scored by **evidence-based review of both the source and the rendered animation**,
 weighted to **prompt fidelity** (does the woven web actually *become* the network) and
@@ -32,24 +32,33 @@ weighted to **prompt fidelity** (does the woven web actually *become* the networ
 |---|-------|----------|:-------:|-----:|-------:|-----:|---------|
 | 1 | **GPT-5.5** | 🇺🇸 OpenAI | ★★★★½ | 157 s | 8.7k | 13.8 KB | Organic asymmetric web **and** polished **and** complete cycle in-window |
 | 2 | **Claude Opus 4.8** | 🇺🇸 Anthropic | ★★★★½ | 41 s | 4.2k | 7.7 KB | Most authentic thread-by-thread weaving + asymmetry; understated/slow |
-| 3 | MiniMax M3 | 🇨🇳 MiniMax | ★★★★ | 13m 5s | 16.3k | 17.7 KB | Best weave *behavior* (radials + return, then spiral); symmetric |
-| 4 | DeepSeek V4 Pro | 🇨🇳 DeepSeek | ★★★★ | 174 s | 16.9k | 40 KB | Real adjacency-driven signal propagation; dense; symmetric |
-| 5 | GLM-5.1 | 🇨🇳 Zhipu | ★★★★ | 517 s | 29.4k | 13.7 KB | Complete warm-amber cycle, particle dissolve; symmetric |
-| 6 | Gemini 3.5 Flash¹ | 🇺🇸 Google | ★★★½ | 158 s | 9.9k | 37 KB | Mild asymmetry, busy HUD, slow payoff |
-| 7 | Grok 4 | 🇺🇸 xAI | ★★½ | 26 s | 1.9k | 5.6 KB | Buggy signal renderer + teleporting spider |
-| 8 | Mistral Large | 🇪🇺 Mistral AI | ★★ | 32 s | 2.7k | 11.6 KB | "Neural net" is a random graph, unrelated to the web |
+| 3 | Claude Fable 5² | 🇺🇸 Anthropic | ★★★★ | ~2 min | n/a | 10.2 KB | Asymmetric thread-by-thread weave; signals ride the real silk graph; glacial pacing (~107 s cycle) |
+| 4 | Kimi K3² | 🇨🇳 Moonshot | ★★★★ | ~15 min | ~13k | 14.7 KB | Most deliberate weave process (dragline drop, sagging spiral); slow 74 s cycle, heaviest think budget |
+| 5 | MiniMax M3 | 🇨🇳 MiniMax | ★★★★ | 13m 5s | 16.3k | 17.7 KB | Best weave *behavior* of the original field (radials + return, then spiral); symmetric |
+| 6 | DeepSeek V4 Pro | 🇨🇳 DeepSeek | ★★★★ | 174 s | 16.9k | 40 KB | Real adjacency-driven signal propagation; dense; symmetric |
+| 7 | GLM-5.1 | 🇨🇳 Zhipu | ★★★★ | 517 s | 29.4k | 13.7 KB | Complete warm-amber cycle, particle dissolve; symmetric |
+| 8 | Gemini 3.5 Flash¹ | 🇺🇸 Google | ★★★½ | 158 s | 9.9k | 37 KB | Mild asymmetry, busy HUD, slow payoff |
+| 9 | Grok 4 | 🇺🇸 xAI | ★★½ | 26 s | 1.9k | 5.6 KB | Buggy signal renderer + teleporting spider |
+| 10 | Mistral Large | 🇪🇺 Mistral AI | ★★ | 32 s | 2.7k | 11.6 KB | "Neural net" is a random graph, unrelated to the web |
 
 <sub>¹ Pro tiers were quota-blocked on the test key; this is `gemini-3.5-flash`. MiniMax was
 generated via web UI (API balance empty). All others via API.</sub>
 
+<sub>² Added 2026-07-19, after the original 8-model run. Kimi K3 came via streaming API
+(~15 min wall, ~54K-char reasoning trace — see
+[`submissions/kimi-k3/reasoning_trace.md`](submissions/kimi-k3/reasoning_trace.md)).
+Fable 5 was generated interactively in Claude Code rather than via raw API, and its entry
+was added and placed by Fable 5 itself — treat that ranking as provisional. Both files are
+strict first-generation outputs per protocol.</sub>
+
 ### Takeaways
-- **Capability is near-solved**: 6 of 8 implement all four phases with a faithful
+- **Capability is near-solved**: 8 of 10 implement all four phases with a faithful
   web→neural transition. The separation is craft, realism, and pacing.
-- **Biological realism is the rare differentiator**: only **GPT-5.5** and **Opus 4.8**
+- **Biological realism is the rare differentiator**: only **GPT-5.5**, **Opus 4.8**, and **Fable 5**
   wove *organically asymmetric* webs. Everyone else is mechanically symmetric.
 - **Two genuine defects**: Grok's signal renderer draws pulses between random node pairs
   (not along edges); Mistral discards the web and builds a random graph.
-- **Effort ≠ quality**: ~30× latency spread (26 s → 13 min) and ~15× tokens for the same
+- **Effort ≠ quality**: ~35× latency spread (26 s → 15 min) and ~15× tokens for the same
   deliverable; neither the leanest (Grok) nor the heaviest (GLM/MiniMax) won.
 
 Full per-model rationale + method: [`scores/evaluation.md`](scores/evaluation.md).

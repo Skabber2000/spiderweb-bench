@@ -118,15 +118,17 @@
           <tbody>
             <tr><td class="m"><span class="rk">1</span><span class="dot us"></span>GPT-5.5 <small>OpenAI</small></td><td>157 s</td><td>8.7k</td><td>13.8 KB</td><td class="q">★★★★½ <i>organic · complete</i></td></tr>
             <tr><td class="m"><span class="rk">2</span><span class="dot us"></span>Claude Opus 4.8 <small>Anthropic</small></td><td>41 s</td><td>4.2k</td><td>7.7 KB</td><td class="q">★★★★½ <i>most authentic weave</i></td></tr>
-            <tr><td class="m"><span class="rk">3</span><span class="dot cn"></span>MiniMax M3 <small>MiniMax</small></td><td>13m 5s</td><td>16.3k</td><td>17.7 KB</td><td class="q">★★★★ <i>best weave behavior</i></td></tr>
-            <tr><td class="m"><span class="rk">4</span><span class="dot cn"></span>DeepSeek V4 Pro <small>DeepSeek</small></td><td>174 s</td><td>16.9k</td><td>40 KB</td><td class="q">★★★★ <i>dense · faithful</i></td></tr>
-            <tr><td class="m"><span class="rk">5</span><span class="dot cn"></span>GLM-5.1 <small>Zhipu</small></td><td>517 s</td><td>29.4k</td><td>13.7 KB</td><td class="q">★★★★ <i>full cycle</i></td></tr>
-            <tr><td class="m"><span class="rk">6</span><span class="dot us"></span>Gemini 3.5 Flash <small>Google</small></td><td>158 s</td><td>9.9k</td><td>37 KB</td><td class="q">★★★½ <i>mild asym · busy HUD</i></td></tr>
-            <tr><td class="m"><span class="rk">7</span><span class="dot us"></span>Grok 4 <small>xAI</small></td><td>26 s</td><td>1.9k</td><td>5.6 KB</td><td class="q">★★½ <i>buggy signals</i></td></tr>
-            <tr><td class="m"><span class="rk">8</span><span class="dot eu"></span>Mistral Large <small>Mistral AI</small></td><td>32 s</td><td>2.7k</td><td>11.6 KB</td><td class="q">★★ <i>random graph</i></td></tr>
+            <tr><td class="m"><span class="rk">3</span><span class="dot us"></span>Claude Fable 5 <small>Anthropic</small></td><td>~2 min</td><td>n/a</td><td>10.2 KB</td><td class="q">★★★★ <i>asymmetric · graph-true</i></td></tr>
+            <tr><td class="m"><span class="rk">4</span><span class="dot cn"></span>Kimi K3 <small>Moonshot</small></td><td>~15 min</td><td>≈13k</td><td>14.7 KB</td><td class="q">★★★★ <i>most deliberate weave</i></td></tr>
+            <tr><td class="m"><span class="rk">5</span><span class="dot cn"></span>MiniMax M3 <small>MiniMax</small></td><td>13m 5s</td><td>16.3k</td><td>17.7 KB</td><td class="q">★★★★ <i>best weave behavior</i></td></tr>
+            <tr><td class="m"><span class="rk">6</span><span class="dot cn"></span>DeepSeek V4 Pro <small>DeepSeek</small></td><td>174 s</td><td>16.9k</td><td>40 KB</td><td class="q">★★★★ <i>dense · faithful</i></td></tr>
+            <tr><td class="m"><span class="rk">7</span><span class="dot cn"></span>GLM-5.1 <small>Zhipu</small></td><td>517 s</td><td>29.4k</td><td>13.7 KB</td><td class="q">★★★★ <i>full cycle</i></td></tr>
+            <tr><td class="m"><span class="rk">8</span><span class="dot us"></span>Gemini 3.5 Flash <small>Google</small></td><td>158 s</td><td>9.9k</td><td>37 KB</td><td class="q">★★★½ <i>mild asym · busy HUD</i></td></tr>
+            <tr><td class="m"><span class="rk">9</span><span class="dot us"></span>Grok 4 <small>xAI</small></td><td>26 s</td><td>1.9k</td><td>5.6 KB</td><td class="q">★★½ <i>buggy signals</i></td></tr>
+            <tr><td class="m"><span class="rk">10</span><span class="dot eu"></span>Mistral Large <small>Mistral AI</small></td><td>32 s</td><td>2.7k</td><td>11.6 KB</td><td class="q">★★ <i>random graph</i></td></tr>
           </tbody>
         </table>
-        <div class="foot">Only <b>GPT-5.5</b> &amp; <b>Opus 4.8</b> wove <b>organically asymmetric</b>
+        <div class="foot">Only <b>GPT-5.5</b>, <b>Opus 4.8</b> &amp; <b>Fable 5</b> wove <b>organically asymmetric</b>
           webs (biological realism) with a faithful web→neural transition — the two leaders. The rest
           are mechanically symmetric; Mistral's "network" is a random graph unrelated to the web.</div>
       </div>
@@ -187,6 +189,7 @@
 const MODELS={
   usa:[
     {id:"claude-opus-4.8", name:"Claude Opus 4.8",  prov:"Anthropic"},
+    {id:"fable-5",         name:"Claude Fable 5",   prov:"Anthropic"},
     {id:"gpt-5.5",         name:"GPT-5.5",          prov:"OpenAI"},
     {id:"grok-4",          name:"Grok 4",           prov:"xAI"},
     {id:"gemini-3-pro",    name:"Gemini 3.5 Flash", prov:"Google"},
@@ -195,6 +198,7 @@ const MODELS={
     {id:"glm-5.1",         name:"GLM-5.1",          prov:"Zhipu"},
     {id:"deepseek-v4",     name:"DeepSeek V4 Pro",  prov:"DeepSeek"},
     {id:"minimax-m3",      name:"MiniMax M3",       prov:"MiniMax"},
+    {id:"kimi-k3",         name:"Kimi K3",          prov:"Moonshot"},
   ],
   eu:[
     {id:"mistral-large",   name:"Mistral Large",    prov:"Mistral AI"},
